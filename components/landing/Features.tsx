@@ -1,4 +1,4 @@
-import { ArrowDownToLine, History, Radio, Search, UsersRound } from 'lucide-react';
+import { ArrowDownToLine, History, PenLine, Radio, Search, UsersRound } from 'lucide-react';
 
 import { Reveal } from '@/components/landing/Reveal';
 
@@ -14,6 +14,12 @@ const FEATURES = [
     title: 'Groups in seconds',
     description:
       'Name a group, pick the people, done. Everyone sees it appear the moment it exists.',
+  },
+  {
+    icon: PenLine,
+    title: 'See them typing',
+    description:
+      'Live typing indicators, so you know a reply is coming instead of staring at a still screen.',
   },
   {
     icon: Search,

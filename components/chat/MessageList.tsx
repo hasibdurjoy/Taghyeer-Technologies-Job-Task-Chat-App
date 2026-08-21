@@ -4,12 +4,13 @@ import { ArrowDown, MessagesSquare } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 
 import { MessageBubble } from '@/components/chat/MessageBubble';
+import { TypingBubble } from '@/components/chat/TypingIndicator';
 import { Button } from '@/components/ui/Button';
 import { EmptyState, ErrorState, MessageSkeleton } from '@/components/ui/StateViews';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
 import { formatDateSeparator, isNewDay } from '@/lib/format';
 import { cx } from '@/lib/utils';
-import type { Conversation, Message } from '@/types/chat';
+import type { Conversation, Message, TypingUser } from '@/types/chat';
 
 interface MessageListProps {
   conversation: Conversation;
@@ -22,6 +23,8 @@ interface MessageListProps {
   onReload: () => void;
   onLoadOlder: () => Promise<void>;
   onRetryMessage: (clientId: string) => void;
+  /** Participants currently typing, shown as a bubble below the last message. */
+  typingUsers: TypingUser[];
 }
 
 interface RenderRow {
@@ -46,12 +49,16 @@ export function MessageList({
   onReload,
   onLoadOlder,
   onRetryMessage,
+  typingUsers,
 }: MessageListProps) {
   const { scrollRef, newMessageCount, isPinnedToBottom, scrollToBottom, handleScroll } =
     useAutoScroll({
       conversationId: conversation.id,
       messages,
       currentUserId,
+      // The bubble adds height below the last message; auto-scroll needs to know
+      // so a reader sitting at the bottom stays there when it appears.
+      extraBottomContent: typingUsers.length > 0,
     });
 
   /**
@@ -133,12 +140,19 @@ export function MessageList({
         )}
 
         {showEmptyState && (
-          <EmptyState
-            icon={<MessagesSquare className="size-5" />}
-            title={`This is the start of your conversation with ${conversation.title}`}
-            description="Send a message to get things going."
-            className="py-16"
-          />
+          <>
+            <EmptyState
+              icon={<MessagesSquare className="size-5" />}
+              title={`This is the start of your conversation with ${conversation.title}`}
+              description="Send a message to get things going."
+              className="py-16"
+            />
+            {typingUsers.length > 0 && (
+              <div className="mx-auto max-w-3xl px-4 sm:px-6">
+                <TypingBubble users={typingUsers} />
+              </div>
+            )}
+          </>
         )}
 
         {messages.length > 0 && (
@@ -174,6 +188,8 @@ export function MessageList({
                 </li>
               ))}
             </ol>
+
+            <TypingBubble users={typingUsers} />
 
             {/* An error while history is already on screen shouldn't hide it. */}
             {error && (

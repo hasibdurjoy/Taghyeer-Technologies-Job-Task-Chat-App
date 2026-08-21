@@ -15,6 +15,8 @@ session to observe the real-time events.
 - [Messages](#messages)
 - [Groups](#groups)
 - [WebSocket (Socket.io)](#websocket-socketio)
+- [No typing / presence channel](#there-is-no-typing--presence-channel)
+- [This application's own endpoints](#this-applications-own-endpoints)
 - [Error format](#error-format)
 - [Known quirks](#known-quirks)
 
@@ -450,6 +452,30 @@ populated, `admins`), without `lastMessage`. Delivered to all members including 
 for the whole app, exposes connection status, and refetches on reconnect to close any gap of messages
 missed while disconnected.
 
+### There is no typing / presence channel
+
+Worth recording explicitly, because "user is typing…" is the obvious next feature and the API cannot
+support it. This was probed directly rather than assumed:
+
+- **Socket**: ten candidate event names were emitted with ack callbacks from an authenticated
+  connection — `typing`, `typing:start`, `typing:stop`, `user:typing`, `message:typing`,
+  `conversation:typing`, `startTyping`, `stopTyping`, `typing:new`, `is-typing`. **Every one received
+  no ack**, and a second socket belonging to the other participant, listening with `onAny`, received
+  **nothing** in any case. The server does not relay arbitrary client events; it only emits the two
+  events above.
+- **REST**: `POST /typing`, `POST /conversations/{id}/typing`, `POST /conversations/{id}/presence`,
+  `POST /presence` and `POST /events` all return `404 NOT_FOUND`. There is no SSE stream either.
+
+The only member-wide broadcast reachable from a client is `PATCH /conversations/{id}`, which fires
+`conversation:updated` — but it renames the group as a side effect, so it is not usable as a
+signalling channel.
+
+**Consequence:** a typing indicator cannot be built on this API alone. Since the feature was wanted,
+the app runs a **small relay of its own** for typing signals only — documented below under
+[This application's own endpoints](#this-applications-own-endpoints). Nothing about it is simulated:
+what one user sees is another user's keystrokes. Everything else still goes through the provided API
+untouched.
+
 ---
 
 ## Error format
@@ -519,3 +545,65 @@ place so the rest of the codebase stays clean.
 | 15 | Missing token is `400`, not `401` | both mapped to "unauthenticated" |
 | 16 | Re-login overwrites the display name | documented; the login form pre-fills the last used name |
 | 17 | No unread/read state in the API | unread badges are tracked in-session only; see README → Architecture |
+| 18 | No typing / presence channel of any kind | typing signals travel over this app's own SSE relay, not the upstream socket |
+
+---
+
+## This application's own endpoints
+
+These are **not** part of the upstream API. They exist for one reason: the upstream API has no typing
+channel (see [above](#there-is-no-typing--presence-channel)), and a typing indicator was wanted.
+
+They handle **typing signals only**. No user, conversation or message data passes through them, and
+nothing is stored — an event is fanned out to whoever is currently listening on that conversation and
+then discarded. The provided API remains the sole source of truth for all chat data.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/typing` | announce that you started or stopped typing |
+| `GET` | `/api/typing/stream?conversationId=` | SSE stream of other participants' typing signals |
+
+Both require the same `Authorization: Bearer <jwt>` header as the upstream API. The token is
+validated by calling upstream `GET /auth/me` (we hold no signing secret, so the signature can't be
+verified locally), and conversation membership is checked against upstream `GET /conversations`.
+Both lookups are cached in-process — 60s and 30s respectively — so a burst of keystrokes doesn't
+cause a burst of upstream requests.
+
+### `POST /api/typing`
+
+**Request** — `{ "conversationId": "…", "isTyping": true }`
+
+**Response `204`** with no body — these are fire-and-forget.
+
+| Status | Cause |
+|---|---|
+| `400` | missing/invalid `conversationId` or non-boolean `isTyping` |
+| `401` | missing or invalid token |
+| `403` | not a participant of that conversation |
+
+### `GET /api/typing/stream?conversationId=<id>`
+
+Server-sent events. Each frame carries one signal:
+
+```
+data: {"conversationId":"6a888bcf…","userId":"6a888bc2…","name":"Ada Lovelace","isTyping":true}
+```
+
+Comment frames (`: connected`, `: ping`) are sent on open and every 25 seconds to keep intermediaries
+from closing an idle connection.
+
+**A signal is never delivered back to its author** — the same rule the upstream socket follows for
+`message:new`, which keeps the client logic uniform.
+
+The client reads this with `fetch` and a stream reader rather than `EventSource`, because
+`EventSource` cannot set an `Authorization` header and putting a JWT in the query string would leak
+it into access logs and browser history. Reconnection with backoff is handled in
+[`hooks/useTypingIndicator.ts`](../hooks/useTypingIndicator.ts).
+
+> **Deployment note.** The relay keeps its subscribers in process memory, so it requires a
+> **single long-running Node server** (`next start`, Docker, Render, Railway, a VPS). On a serverless
+> platform such as Vercel, each invocation has its own memory and the publisher and subscriber may
+> land on different instances, so signals would not be delivered. That target needs an external
+> broker — Redis pub/sub, Ably or Pusher — behind the same interface in
+> [`lib/typing/registry.ts`](../lib/typing/registry.ts). Everything else in the app is static and
+> deploys anywhere.

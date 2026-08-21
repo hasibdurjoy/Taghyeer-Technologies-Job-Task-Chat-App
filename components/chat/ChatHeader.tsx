@@ -2,16 +2,18 @@
 
 import { ArrowLeft } from 'lucide-react';
 
+import { TypingLabel } from '@/components/chat/TypingIndicator';
 import { Avatar } from '@/components/ui/Avatar';
-import type { Conversation } from '@/types/chat';
+import type { Conversation, TypingUser } from '@/types/chat';
 
 interface ChatHeaderProps {
   conversation: Conversation;
+  typingUsers: TypingUser[];
   /** Returns to the conversation list on mobile. */
   onBack: () => void;
 }
 
-export function ChatHeader({ conversation, onBack }: ChatHeaderProps) {
+export function ChatHeader({ conversation, typingUsers, onBack }: ChatHeaderProps) {
   const isGroup = conversation.type === 'group';
 
   const subtitle = isGroup
@@ -43,7 +45,11 @@ export function ChatHeader({ conversation, onBack }: ChatHeaderProps) {
         <h1 className="truncate text-[0.9375rem] font-semibold leading-tight text-ink-950">
           {conversation.title}
         </h1>
-        {subtitle && <p className="truncate text-xs text-ink-400">{subtitle}</p>}
+        {typingUsers.length > 0 ? (
+          <TypingLabel users={typingUsers} className="truncate text-xs" />
+        ) : (
+          subtitle && <p className="truncate text-xs text-ink-400">{subtitle}</p>
+        )}
       </div>
     </header>
   );

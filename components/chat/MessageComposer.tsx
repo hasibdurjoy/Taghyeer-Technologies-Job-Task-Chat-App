@@ -10,6 +10,8 @@ interface MessageComposerProps {
   conversationTitle: string;
   draft: string;
   onDraftChange: (conversationId: string, value: string) => void;
+  /** Called on each keystroke; the hook throttles the outgoing signal. */
+  onTyping: () => void;
   onSend: (text: string) => Promise<void>;
   isDisconnected: boolean;
 }
@@ -21,6 +23,7 @@ export function MessageComposer({
   conversationTitle,
   draft,
   onDraftChange,
+  onTyping,
   onSend,
   isDisconnected,
 }: MessageComposerProps) {
@@ -110,7 +113,11 @@ export function MessageComposer({
           ref={textareaRef}
           rows={1}
           value={draft}
-          onChange={(event) => onDraftChange(conversationId, event.target.value)}
+          onChange={(event) => {
+            onDraftChange(conversationId, event.target.value);
+            // Only signal on real content — clearing the box isn't typing.
+            if (event.target.value.trim()) onTyping();
+          }}
           onKeyDown={handleKeyDown}
           placeholder={`Message ${conversationTitle}`}
           className={cx(

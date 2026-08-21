@@ -14,6 +14,7 @@ import { useConversations } from '@/hooks/useConversations';
 import { useDrafts } from '@/hooks/useDrafts';
 import { useMessages } from '@/hooks/useMessages';
 import { useRealtime } from '@/hooks/useRealtime';
+import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import { cx } from '@/lib/utils';
 import type { Message, User } from '@/types/chat';
 
@@ -65,6 +66,10 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
   } = useMessages(token, currentUser.id, activeId);
 
   const { getDraft, setDraft, clearDraft } = useDrafts();
+
+  // Typing signals travel over this app's own relay: the provided API has no
+  // typing channel (docs/API.md → "There is no typing / presence channel").
+  const { typingUsers, notifyTyping, clearTyping } = useTypingIndicator(token, activeId);
 
   // Realtime handlers read the active id through a ref so that switching
   // conversations never tears down and re-establishes the socket.
@@ -128,12 +133,14 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
       // fails, the text lives on in that bubble with a Retry control — leaving it
       // in the composer too would show the same message twice.
       clearDraft(activeId);
+      // The message is on its way, so stop advertising that we're typing.
+      clearTyping();
 
       const saved = await send(text);
       if (saved) applyOwnMessage(saved);
       else showToast('Message not delivered. Use Retry on the message to send it again.');
     },
-    [activeId, send, applyOwnMessage, clearDraft, showToast],
+    [activeId, send, applyOwnMessage, clearDraft, clearTyping, showToast],
   );
 
   const handleRetryMessage = useCallback(
@@ -180,6 +187,7 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
             <>
               <ChatHeader
                 conversation={activeConversation}
+                typingUsers={typingUsers}
                 onBack={() => setMobilePane('list')}
               />
               <MessageList
@@ -193,12 +201,14 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
                 onReload={reloadMessages}
                 onLoadOlder={loadOlder}
                 onRetryMessage={handleRetryMessage}
+                typingUsers={typingUsers}
               />
               <MessageComposer
                 conversationId={activeConversation.id}
                 conversationTitle={activeConversation.title}
                 draft={getDraft(activeConversation.id)}
                 onDraftChange={setDraft}
+                onTyping={notifyTyping}
                 onSend={handleSend}
                 isDisconnected={connectionStatus === 'disconnected'}
               />

@@ -66,6 +66,20 @@
   }
 }
 
+/* The three bouncing dots of the typing indicator. */
+@keyframes typing-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
 @keyframes pulse-ring {
   0% {
     transform: scale(0.9);

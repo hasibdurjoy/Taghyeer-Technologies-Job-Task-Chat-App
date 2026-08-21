@@ -12,6 +12,12 @@ interface UseAutoScrollOptions {
   conversationId: string;
   messages: Message[];
   currentUserId: string;
+  /**
+   * True when something is rendered below the last message (the typing bubble).
+   * It changes the container's height, so a reader sitting at the bottom needs
+   * to be nudged down to stay there.
+   */
+  extraBottomContent?: boolean;
 }
 
 interface UseAutoScrollResult {
@@ -45,6 +51,7 @@ export function useAutoScroll({
   conversationId,
   messages,
   currentUserId,
+  extraBottomContent = false,
 }: UseAutoScrollOptions): UseAutoScrollResult {
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -129,6 +136,15 @@ export function useAutoScroll({
       scrollToBottom(isOwnMessage ? 'smooth' : 'auto');
     }
   }, [lastMessage, conversationId, currentUserId, scrollToBottom, isNearBottom]);
+
+  // The typing bubble appearing or disappearing changes the scroll height. Only
+  // follow it when the user is already at the bottom — never interrupt someone
+  // reading further up.
+  useLayoutEffect(() => {
+    if (!extraBottomContent || anchorId !== null) return;
+    const container = scrollRef.current;
+    if (container) container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+  }, [extraBottomContent, anchorId]);
 
   return {
     scrollRef,

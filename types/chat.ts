@@ -52,3 +52,22 @@ export interface Message {
 }
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
+
+/**
+ * A typing signal relayed between participants.
+ *
+ * Not part of the upstream API — it has no typing channel — so these travel
+ * through this app's own relay. Nothing is persisted; the event is transient.
+ */
+export interface TypingEvent {
+  conversationId: string;
+  userId: string;
+  name: string;
+  isTyping: boolean;
+}
+
+/** Someone currently typing in the open conversation. */
+export interface TypingUser {
+  id: string;
+  name: string;
+}

@@ -9,7 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "verify": "node --experimental-strip-types --no-warnings --import ./scripts/register-loader.mjs scripts/verify-logic.ts",
-    "verify:api": "node --experimental-strip-types --no-warnings --import ./scripts/register-loader.mjs scripts/verify-integration.ts"
+    "verify:api": "node --experimental-strip-types --no-warnings --import ./scripts/register-loader.mjs scripts/verify-integration.ts",
+    "verify:typing": "node --experimental-strip-types --no-warnings --import ./scripts/register-loader.mjs scripts/verify-typing.ts"
   },
   "dependencies": {
     "lucide-react": "^1.33.0",
