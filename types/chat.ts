@@ -51,10 +51,4 @@ export interface Message {
   clientId?: string;
 }
 
-/** Per-conversation read marker, persisted by this app's own MongoDB layer. */
-export interface ReadState {
-  conversationId: string;
-  lastReadAt: string;
-}
-
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';

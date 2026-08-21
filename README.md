@@ -24,8 +24,8 @@ Parley has two halves:
 
 **The chat application** (`/login`, `/chat`) — sign in with a phone number and name, find people,
 start one-to-one or group conversations, and exchange messages that arrive in real time. It handles
-the parts that usually get skipped: unread badges, per-conversation drafts, retrying a failed send
-without retyping it, connection status, and a message list that never yanks you away from history
+the parts that usually get skipped: per-conversation drafts, retrying a failed send without retyping
+it, unread badges, connection status, and a message list that never yanks you away from history
 you're reading.
 
 **The landing page** (`/`) — presents the product with an animated preview of the real chat UI.
@@ -39,26 +39,26 @@ simulated real-time.
 
 | | |
 |---|---|
-| **Next.js 16** (App Router) | Routing, server components for static pages, Route Handlers for the read-state API. Note this version renames `middleware.ts` → `proxy.ts`; neither is used here. |
+| **Next.js 16** (App Router) | Routing and static rendering. Note this version renames `middleware.ts` → `proxy.ts`; neither is used here. |
 | **React 19** | `useSyncExternalStore` for browser-storage state, so nothing is copied into state inside an effect. |
 | **TypeScript** (strict) | Wire types and domain types are kept separate — see [`types/`](types/). No `any` in the codebase. |
 | **Tailwind CSS v4** | CSS-first config: the design tokens live in `@theme` in [`app/globals.css`](app/globals.css). |
-| **MongoDB** (native driver) | One collection, for read state only. See [Architecture](#architecture). |
 | **socket.io-client** | Required — the API's real-time layer is Socket.io, which a raw WebSocket cannot speak. |
 | **lucide-react** | Icons. |
 
-Four runtime dependencies in total. No state-management library, no component library, no animation
-library — the animations are CSS keyframes and one `IntersectionObserver`.
+Three runtime dependencies in total, and **no database** — see [Architecture](#architecture) for why.
+No state-management library, no component library, no animation library; the animations are CSS
+keyframes and one `IntersectionObserver`.
 
 ---
 
 ## Setup
 
-**Prerequisites:** Node.js 20+ and npm/yarn. MongoDB is optional (see below).
+**Prerequisites:** Node.js 20+ and npm/yarn. Nothing else — there is no database to run.
 
 ```bash
 npm install
-cp .env.example .env.local     # every variable is optional; see below
+cp .env.example .env.local     # optional — see below
 npm run dev                    # http://localhost:3000
 ```
 
@@ -84,7 +84,7 @@ connection, so it needs network access and takes ~30 seconds. See
 
 ### Environment variables
 
-All four are **optional** — the app runs with none of them set.
+Both are **optional** — the app runs with no `.env` file at all, pointing at the hosted API.
 
 ```env
 # Upstream REST base. Must include the /api suffix.
@@ -92,58 +92,40 @@ NEXT_PUBLIC_API_BASE_URL=https://frontend-task-chatapp.onrender.com/api
 
 # Socket.io origin — the ROOT origin, no /api suffix.
 NEXT_PUBLIC_SOCKET_URL=https://frontend-task-chatapp.onrender.com
-
-# Read state only. Omit both and unread badges simply reset each session.
-MONGODB_URI=mongodb://127.0.0.1:27017
-MONGODB_DB=parley
 ```
 
 `.env.local` is gitignored; `.env.example` carries no secrets and is committed.
 
 ### Deployment
 
-`npm run build` passes with no TypeScript or ESLint errors. For Vercel, set the variables above in
-the project settings — a MongoDB Atlas connection string works as `MONGODB_URI`.
+`npm run build` passes with no TypeScript or ESLint errors. Every route is statically prerendered and there is no
+server-side runtime, so it deploys to Vercel (or any static host) as-is. Set the two variables above
+in the project settings only if you need to point at a different API.
 
 ---
 
 ## Architecture
 
-### The central decision: what MongoDB is for
+### The central decision: no database
 
-The brief asked for MongoDB, but also said to use the given API directly. So the first step was to
-find out what the API actually persists. It persists **everything**: users, conversations, group
-membership and admin roles, and full message history with pagination.
+The first step was to find out what the provided API actually persists. It persists **everything**:
+users, conversations, group membership and admin roles, and full message history with pagination.
 
-Mirroring any of that into MongoDB would create two sources of truth for data the API already owns,
-and every write would need reconciling. So:
+> **The upstream API is the sole source of truth. Nothing is duplicated anywhere.**
 
-> **The upstream API is the sole source of truth for all chat data. Nothing is duplicated.**
+Adding a database of our own would mean either mirroring data the API already owns — two sources of
+truth, and reconciliation on every write — or standing up a server to hold a single auxiliary table.
+Neither earns its keep for this brief, which asks that the given API be used directly. So this is a
+**pure frontend**: no database, no ORM, no server-side runtime, and no API routes of our own. Every
+route is statically prerendered and talks to the provided API from the browser.
 
-That leaves the question of whether MongoDB earns a place at all. It does, for exactly one thing.
-The API exposes **no read state** — no unread counts, no "last read" marker, nothing. Unread badges
-are a genuine product requirement and cannot be derived from the API, and keeping them only in
-memory means they reset on every reload.
-
-**MongoDB stores one collection, `readStates`:**
-
-```ts
-{ userId: string, conversationId: string, lastReadAt: Date }
-```
-
-That's it. No users, no messages, no conversations — only a per-user pointer into conversations the
-API already owns. It is served by two Route Handlers ([`app/api/read-state/route.ts`](app/api/read-state/route.ts)):
-
-| | |
-|---|---|
-| `GET /api/read-state` | all markers for the current user |
-| `PUT /api/read-state` | advance one marker |
-
-Two details worth noting. Markers are **monotonic** — a `PUT` with an older timestamp is ignored, so
-a stale write from a second tab can't resurrect badges the user already cleared. And the whole
-feature **degrades gracefully**: with no `MONGODB_URI`, or with Mongo unreachable, the routes return
-`503` and the client falls back to session-local unread tracking. Chat is never blocked by the
-database.
+The one thing the API genuinely does not expose is **read state** — there is no unread count, no
+"last read" marker, and nothing in a conversation payload distinguishing a message you have seen from
+one you haven't. Unread badges are therefore **session-scoped**: they start empty on load and
+accumulate from messages that arrive while the app is open. That's a deliberate trade — the
+alternative, treating every conversation with any message as unread on each reload, would make the
+badge meaningless. What state *is* worth keeping between visits (the session token and unsent drafts)
+is per-device by nature and lives in `localStorage`.
 
 ### Authentication
 
@@ -160,11 +142,6 @@ through a backend-for-frontend and keep the token server-side.
 
 On boot the stored token is revalidated against `GET /auth/me`. A genuine auth failure clears the
 session; a network error does **not** — a cold-starting free-tier host must not sign people out.
-
-Our own `/api/read-state` routes verify the same bearer token by calling upstream `GET /auth/me`,
-because we don't hold the signing secret and so cannot verify the signature locally. Results are
-cached in-process for 60 seconds to avoid an upstream round-trip per write
-([`lib/auth/verify-token.ts`](lib/auth/verify-token.ts)).
 
 ### Real-time
 
@@ -195,15 +172,15 @@ conversation, because nothing is replayed for the window it was offline.
 ### Frontend structure
 
 ```
-app/                      routes: / (landing), /login, /chat, /api/read-state
+app/                      routes: / (landing), /login, /chat
 components/
   auth/ chat/ landing/    feature components
   ui/                     Button, Avatar, Modal, TextField, Toast, StateViews
 hooks/                    useAuth, useConversations, useMessages,
                           useRealtime, useAutoScroll, useUserSearch, useDrafts
 lib/
-  api/                    http, normalize, auth, users, conversations, messages, read-state
-  auth/  mongodb/  storage/
+  api/                    http, normalize, auth, users, conversations, messages
+  auth/  storage/
   config.ts format.ts utils.ts validation.ts
 types/                    api.ts (wire shapes) · chat.ts (domain shapes)
 scripts/                  verify-logic.ts · verify-integration.ts
@@ -228,6 +205,7 @@ No global state library. State lives at the level that owns it:
   no hydration mismatch and no effect-copy. Signing out in one tab signs out the others.
 - **Conversations / messages** — hooks scoped to the chat, lifted into `ChatLayout`, which is a
   composition root that owns only navigation state (active conversation, open dialog, mobile pane).
+  Unread counts live here too, for the session only.
 - **Drafts** — the same external-store pattern, keyed by conversation.
 
 One pattern is used deliberately throughout: **loading state is derived, not stored.**
@@ -259,8 +237,9 @@ the fetch and restoring it after, so prepended history doesn't push the page aro
 - **No message virtualisation.** Pages are 30 messages and grouped runs keep the DOM small.
   Virtualisation would complicate scroll anchoring for a problem this app doesn't have yet.
 - **No dark mode.** One deliberate light theme, executed properly, over two themes done adequately.
-- **Unread counts start at 1.** The API has no per-message read tracking, so a conversation with
-  unread history shows `1` and increments live. An exact count would mean paging history on load.
+- **Unread badges don't survive a reload.** With no read state in the API and no backend of our own,
+  they can only cover the current session. Persisting them would mean introducing a database for one
+  small feature — not a trade worth making here.
 
 ---
 
@@ -353,8 +332,9 @@ was built on a guessed contract. Beyond that, three gates — all runnable, see 
   non-participants, JWT handshake rejection, and — the one the optimistic UI depends on — that the
   sender genuinely receives no echo of their own message.
 
-The read-state routes were tested separately against a real local MongoDB, including the
-monotonic-marker guard and the 503 degradation path with Mongo unconfigured.
+An earlier revision of this project added MongoDB for persisted read state, with its own Route
+Handlers; it was **removed** on the instruction to rely solely on the provided API. Dropping it
+deleted the only server-side code in the project, which is why every route is now static.
 
 **What was not verified:** there was no browser automation available in this environment, so the UI
 flows were verified through the API/logic layers, server-rendered output, and code review rather than
@@ -424,7 +404,8 @@ message mentions it.
   Vitest unit tests plus Playwright end-to-end coverage of the flows I could only review by hand.
 - **Group management UI.** The API supports adding/removing members, promoting admins, renaming and
   leaving; only creation is exposed today. The API layer is already shaped for the rest.
-- **Exact unread counts**, by recording the last-seen *message id* alongside the timestamp.
+- **Unread badges that persist**, which needs somewhere to record a last-seen message id per user —
+  a small backend of our own, or the API growing read state.
 - **Typing indicators and read receipts** — neither exists upstream; both would need server support.
 - **A backend-for-frontend** holding the token server-side in an httpOnly cookie, if this carried
   real user data.
@@ -434,9 +415,9 @@ message mentions it.
 
 The most useful hour of this build was the one spent before writing any application code, probing
 the API instead of trusting its documentation. The spec is request-only by design, and almost every
-interesting decision here — optimistic UI being safe, no polling, what MongoDB is actually for, why
-phone search can't work — came from behaviour observed on the live service rather than anything the
-documentation stated. Assuming the map matches the territory is how take-homes quietly go wrong.
+interesting decision here — optimistic UI being safe, no polling at all, why phone search can't
+work, and what the API does *not* store — came from behaviour observed on the live service rather
+than anything the documentation stated. Assuming the map matches the territory is how take-homes quietly go wrong.
 
 *(The assignment asks that this write-up contain the word **Madagascar** — noted here explicitly
 rather than wedged into a sentence where it wouldn't belong.)*

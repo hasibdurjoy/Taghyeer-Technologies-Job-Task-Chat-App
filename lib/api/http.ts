@@ -33,7 +33,7 @@ export class ApiError extends Error {
     return this.status === 401 || this.code === 'NO_TOKEN' || this.code === 'INVALID_TOKEN';
   }
 
-  /** MongoDB's invalid-regex error, produced by unescaped input to `/users/search`. */
+  /** The upstream invalid-regex error, produced by unescaped input to `/users/search`. */
   get isInvalidRegex(): boolean {
     return this.code === 51091;
   }
@@ -126,8 +126,8 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 }
 
 /**
- * Unwraps the `{ data: [...] }` envelope used by `GET /conversations` and this
- * app's own read-state routes. Other endpoints return bare values.
+ * Unwraps the `{ data: [...] }` envelope used by `GET /conversations`.
+ * Other list endpoints return a bare array.
  */
 export function unwrapData<T>(payload: { data?: T[] } | T[] | null): T[] {
   if (Array.isArray(payload)) return payload;

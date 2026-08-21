@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { listConversations } from '@/lib/api/conversations';
 import { normalizeConversation } from '@/lib/api/normalize';
-import { fetchReadStates, markConversationRead } from '@/lib/api/read-state';
 import type { RawConversation } from '@/types/api';
 import type { Conversation, Message } from '@/types/chat';
 
@@ -32,10 +31,12 @@ function sortByRecency(conversations: Conversation[]): Conversation[] {
 /**
  * Owns the conversation list, its previews and unread badges.
  *
- * Unread counts are this app's own feature — the upstream API exposes no read
- * state at all. Persisted markers come from MongoDB and are merged with live
- * counts so badges survive a reload; if that store is unavailable the counts
- * simply reset per session.
+ * Unread counts are tracked **for the current session only**. The API exposes no
+ * read state — no unread count, no "last read" marker — and nothing in a
+ * conversation payload distinguishes a message you have seen from one you
+ * haven't. Counts therefore start empty on load and accumulate from messages
+ * that arrive while the app is open, which is honest: marking every existing
+ * conversation unread on every reload would be worse than showing no badge.
  */
 export function useConversations(token: string, currentUserId: string): UseConversationsResult {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -56,30 +57,14 @@ export function useConversations(token: string, currentUserId: string): UseConve
     [token, currentUserId],
   );
 
-  // Initial load: conversations plus any persisted read markers, so unread
-  // badges are correct on first paint rather than flashing in afterwards.
   useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;
 
-    Promise.all([load(controller.signal), fetchReadStates(token, controller.signal)])
-      .then(([list, readStates]) => {
+    load(controller.signal)
+      .then((list) => {
         if (cancelled) return;
         setConversations(sortByRecency(list));
-
-        const readAtByConversation = new Map(
-          readStates.map((state) => [state.conversationId, state.lastReadAt]),
-        );
-        const counts: Record<string, number> = {};
-        for (const conversation of list) {
-          const last = conversation.lastMessage;
-          if (!last || last.senderId === currentUserId) continue;
-          const readAt = readAtByConversation.get(conversation.id);
-          // Without per-message read tracking upstream, an unread conversation
-          // starts at a badge of 1 and increments as live messages arrive.
-          if (!readAt || new Date(last.createdAt) > new Date(readAt)) counts[conversation.id] = 1;
-        }
-        setUnreadCounts(counts);
       })
       .catch((err: unknown) => {
         if (cancelled || (err instanceof DOMException && err.name === 'AbortError')) return;
@@ -93,7 +78,7 @@ export function useConversations(token: string, currentUserId: string): UseConve
       cancelled = true;
       controller.abort();
     };
-  }, [load, token, currentUserId]);
+  }, [load, currentUserId]);
 
   const refresh = useCallback(async () => {
     try {
@@ -133,18 +118,14 @@ export function useConversations(token: string, currentUserId: string): UseConve
     return matched;
   }, []);
 
-  const markRead = useCallback(
-    (conversationId: string) => {
-      setUnreadCounts((current) => {
-        if (!current[conversationId]) return current;
-        const next = { ...current };
-        delete next[conversationId];
-        return next;
-      });
-      void markConversationRead(token, conversationId, new Date().toISOString());
-    },
-    [token],
-  );
+  const markRead = useCallback((conversationId: string) => {
+    setUnreadCounts((current) => {
+      if (!current[conversationId]) return current;
+      const next = { ...current };
+      delete next[conversationId];
+      return next;
+    });
+  }, []);
 
   const applyIncomingMessage = useCallback(
     (message: Message, isActive: boolean) => {
@@ -156,17 +137,15 @@ export function useConversations(token: string, currentUserId: string): UseConve
       // until the next manual reload.
       if (!known) void refresh();
 
-      if (isActive) {
-        // Reading it now — keep the persisted marker moving forward.
-        void markConversationRead(token, message.conversationId, message.createdAt);
-        return;
-      }
+      // The conversation is open, so the message is already being read.
+      if (isActive) return;
+
       setUnreadCounts((current) => ({
         ...current,
         [message.conversationId]: (current[message.conversationId] ?? 0) + 1,
       }));
     },
-    [applyPreview, refresh, token],
+    [applyPreview, refresh],
   );
 
   /**

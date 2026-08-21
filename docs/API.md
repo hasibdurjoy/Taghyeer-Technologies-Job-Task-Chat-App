@@ -121,7 +121,7 @@ Note the inconsistency: a *missing* token is `400`, not `401`. The app treats bo
 "unauthenticated" (see [`lib/api/http.ts`](../lib/api/http.ts)).
 
 **Frontend usage** — [`lib/api/auth.ts`](../lib/api/auth.ts) `getMe()`, called on app boot to
-rehydrate the session, and server-side to authenticate read-state requests.
+rehydrate the session and revalidate a stored token on boot.
 
 ---
 
@@ -518,32 +518,4 @@ place so the rest of the codebase stays clean.
 | 14 | `lastMessage` is `{}`, not `null`, when empty | treated as absent during normalization |
 | 15 | Missing token is `400`, not `401` | both mapped to "unauthenticated" |
 | 16 | Re-login overwrites the display name | documented; the login form pre-fills the last used name |
-| 17 | No unread/read state in the API | provided by this app's own MongoDB layer (see README → Architecture) |
-
----
-
-## This application's own endpoints
-
-These are **not** part of the upstream API. They are thin Next.js Route Handlers backing the one
-feature the upstream API does not provide — unread badges. They store no copy of any user,
-conversation or message. See the Architecture section of the [README](../README.md).
-
-| Method | Path | Body | Purpose |
-|---|---|---|---|
-| `GET` | `/api/read-state` | — | all read markers for the current user |
-| `PUT` | `/api/read-state` | `{ conversationId, lastReadAt }` | mark a conversation read |
-
-Both require the same `Authorization: Bearer <jwt>` header as the upstream API. The handler validates
-the token by calling upstream `GET /auth/me` (we hold no signing secret and therefore cannot verify
-the signature locally), with a short-lived in-process cache to avoid an upstream round-trip per
-request.
-
-**Response `200`** for `GET`:
-
-```json
-{ "data": [ { "conversationId": "6a888bcf…", "lastReadAt": "2026-08-21T17:33:11.763Z" } ] }
-```
-
-If MongoDB is not configured or unreachable, both routes return `503` with
-`{"error":{"message":"Read state is unavailable","code":"READ_STATE_UNAVAILABLE"}}` and the client
-falls back to session-local unread tracking — chat itself is never blocked.
+| 17 | No unread/read state in the API | unread badges are tracked in-session only; see README → Architecture |

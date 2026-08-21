@@ -8,7 +8,10 @@
  * See docs/API.md for the observed responses these were derived from.
  */
 
-/** The upstream error envelope. `code` is usually a string, but MongoDB regex failures return a number. */
+/**
+ * The upstream error envelope. `code` is usually a string, but the invalid-regex
+ * failure from `/users/search` returns a number (`51091`).
+ */
 export interface ApiErrorBody {
   error: {
     message: string;

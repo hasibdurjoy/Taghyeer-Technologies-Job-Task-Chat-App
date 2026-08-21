@@ -12,9 +12,8 @@ const draftsStore = createLocalStore<DraftMap>('chat.drafts', {});
  * Preserves an unsent message per conversation.
  *
  * Switching conversations mid-sentence — or reloading the page — is a common way
- * to lose a message. Drafts live in `localStorage` rather than the read-state
- * database because they are per-device by nature and change on every keystroke,
- * where a network round-trip would be wasteful.
+ * to lose a message. The API has nowhere to put an unsent draft, and drafts are
+ * per-device by nature, so `localStorage` is the right home for them.
  */
 export function useDrafts(): {
   getDraft: (conversationId: string) => string;
