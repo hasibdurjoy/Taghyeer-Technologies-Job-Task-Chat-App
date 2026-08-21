@@ -6,12 +6,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "verify": "node --experimental-strip-types --no-warnings --import ./scripts/register-loader.mjs scripts/verify-logic.ts",
+    "verify:api": "node --experimental-strip-types --no-warnings --import ./scripts/register-loader.mjs scripts/verify-integration.ts"
   },
   "dependencies": {
+    "lucide-react": "^1.33.0",
+    "mongodb": "^7.5.0",
     "next": "16.3.2",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -1,26 +1,155 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/**
+ * Design tokens.
+ *
+ * The palette is deliberately narrow: warm paper, deep ink, and a single amber
+ * accent reserved for actions and alerts. Own-message bubbles use ink rather
+ * than the accent so a long conversation stays calm to read, which also keeps
+ * the accent meaningful wherever it does appear.
+ */
+@theme {
+  --color-paper: #faf8f5;
+  --color-paper-dim: #f2eee8;
+  --color-surface: #ffffff;
+
+  --color-ink-950: #0b0f17;
+  --color-ink-900: #131924;
+  --color-ink-800: #1e2634;
+  --color-ink-700: #2f3a4c;
+  --color-ink-500: #5a6577;
+  --color-ink-400: #7d8798;
+  --color-ink-300: #a8b0bd;
+  --color-ink-200: #d5dae2;
+  --color-ink-100: #e8ebf0;
+
+  --color-accent: #d97706;
+  --color-accent-soft: #fef3c7;
+  --color-accent-deep: #b45309;
+
+  --color-danger: #b42318;
+  --color-danger-soft: #fef2f1;
+  --color-success: #157f5c;
+
+  --font-display: var(--font-instrument-serif), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 1rem;
+  --radius-bubble: 1.125rem;
+
+  --shadow-soft: 0 1px 2px rgba(11, 15, 23, 0.04), 0 8px 24px -12px rgba(11, 15, 23, 0.14);
+  --shadow-lifted: 0 2px 4px rgba(11, 15, 23, 0.05), 0 24px 48px -20px rgba(11, 15, 23, 0.28);
+
+  --animate-rise: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-pop: pop 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  70% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-paper);
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+  /* Prevent the mobile chat layout from rubber-banding the whole page. */
+  overscroll-behavior-y: none;
+}
+
+/* A single, consistent focus treatment across every interactive element. */
+:where(a, button, input, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* The scroll containers in the chat get a lighter scrollbar than the default. */
+.scroll-subtle {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink-200) transparent;
+}
+
+.scroll-subtle::-webkit-scrollbar {
+  width: 10px;
+}
+
+.scroll-subtle::-webkit-scrollbar-thumb {
+  background-color: var(--color-ink-200);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+
+.scroll-subtle::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/**
+ * Scroll-reveal, driven by CSS so the server and client markup match and the
+ * content is never left hidden when JavaScript doesn't run.
+ *
+ * `@media (scripting: enabled)` scopes the hidden state to browsers that will
+ * actually run the observer that reveals it again.
+ */
+@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+  .reveal {
+    opacity: 0;
+  }
+
+  .reveal-visible {
+    animation: var(--animate-rise);
+  }
+}
+
+/* Faint dotted texture used behind the landing hero and the empty chat state. */
+.texture-dots {
+  background-image: radial-gradient(var(--color-ink-200) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
