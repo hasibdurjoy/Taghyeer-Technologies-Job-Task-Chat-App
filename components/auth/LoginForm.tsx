@@ -105,7 +105,7 @@ export function LoginForm() {
                 <MessagesSquare className="size-6" strokeWidth={1.75} />
               </span>
               <h1 className="font-display text-4xl leading-tight tracking-tight text-ink-950">
-                Welcome to Parley
+                Welcome to Messengo
               </h1>
               <p className="mt-2 text-[0.9375rem] leading-relaxed text-ink-500">
                 Enter your phone number and name to continue. If you&apos;re new here, your account

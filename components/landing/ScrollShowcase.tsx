@@ -7,7 +7,7 @@ const DETAILS = [
     icon: ArrowDown,
     label: 'Smart scrolling',
     title: '“3 new messages” instead of a jolt',
-    body: 'Reading back through a thread is normal. When something new arrives while you are up there, Parley counts it in a small pill at the bottom rather than dragging you away mid-sentence. Tap it to catch up.',
+    body: 'Reading back through a thread is normal. When something new arrives while you are up there, Messengo counts it in a small pill at the bottom rather than dragging you away mid-sentence. Tap it to catch up.',
   },
   {
     icon: RotateCw,

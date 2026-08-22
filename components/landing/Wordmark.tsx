@@ -28,7 +28,7 @@ export function Wordmark({ className, isOnDark = false }: { className?: string; 
           isOnDark ? 'text-white' : 'text-ink-950',
         )}
       >
-        Parley
+        Messengo
       </span>
     </span>
   );

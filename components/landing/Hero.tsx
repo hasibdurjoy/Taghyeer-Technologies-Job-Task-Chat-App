@@ -32,7 +32,7 @@ export function Hero() {
 
           <Reveal delay={120}>
             <p className="mt-5 max-w-lg text-lg leading-relaxed text-ink-500">
-              Parley is messaging stripped back to the part that matters — the conversation.
+              Messengo is messaging stripped back to the part that matters — the conversation.
               Messages land the moment they&apos;re sent, groups take seconds to start, and the
               message list never loses your place.
             </p>

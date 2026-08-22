@@ -19,7 +19,7 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: 'Parley — Conversations worth keeping',
+  title: 'Messengo — Conversations worth keeping',
   description:
     'A fast, focused messaging app for direct and group conversations, with real-time delivery and a message list built for actually reading.',
 };

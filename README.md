@@ -1,4 +1,4 @@
-# Parley
+# Messengo
 
 A real-time messaging application — direct and group conversations, live delivery over
 WebSockets, and a message list built for actually reading — plus a landing page presenting it as a
@@ -20,7 +20,7 @@ Built against the assignment's provided API at `https://frontend-task-chatapp.on
 
 ## Project Overview
 
-Parley has two halves:
+Messengo has two halves:
 
 **The chat application** (`/login`, `/chat`) — sign in with a phone number and name, find people,
 start one-to-one or group conversations, and exchange messages that arrive in real time. It handles
