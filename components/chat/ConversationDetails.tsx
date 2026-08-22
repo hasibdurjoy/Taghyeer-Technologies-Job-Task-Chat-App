@@ -152,23 +152,33 @@ export function ConversationDetails({
         )
       )}
 
-      <div className="mt-auto border-t border-ink-100 px-6 py-4">
+      <div className={cx('border-t border-ink-100 px-6 py-4', !isGroup && 'mt-auto')}>
         <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-400">Last activity</h3>
         <p className="mt-1.5 text-sm text-ink-700">{formatFullTimestamp(conversation.updatedAt)}</p>
+      </div>
 
-        {isGroup && (
+      {isGroup && (
+        /*
+         * Pinned to the bottom of the panel.
+         *
+         * `mt-auto` puts it at the bottom when the member list is short;
+         * `sticky bottom-0` keeps it in view once the list is long enough to
+         * scroll, so leaving never means scrolling past everyone first. The
+         * opaque background is what stops members sliding under it.
+         */
+        <div className="sticky bottom-0 mt-auto border-t border-ink-100 bg-surface px-6 py-4">
           <Button
             variant="ghost"
             size="sm"
             onClick={onLeave}
             isLoading={pending?.kind === 'leave'}
-            className="mt-4 w-full text-danger hover:bg-danger-soft"
+            className="w-full text-danger hover:bg-danger-soft"
           >
             <LogOut aria-hidden className="size-4" />
             Leave group
           </Button>
-        )}
-      </div>
+        </div>
+      )}
     </aside>
   );
 }

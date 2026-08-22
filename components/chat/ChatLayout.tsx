@@ -83,8 +83,9 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
   // `xl` in Tailwind's default scale.
   const isWideViewport = useMediaQuery('(min-width: 80rem)');
   const [isAddMembersOpen, setIsAddMembersOpen] = useState(false);
-  /** The member an admin is about to remove — drives the confirmation step. */
+  /** The members an admin is about to remove / promote — each drives a confirmation step. */
   const [memberToRemove, setMemberToRemove] = useState<User | null>(null);
+  const [memberToPromote, setMemberToPromote] = useState<User | null>(null);
   const [isConfirmingLeave, setIsConfirmingLeave] = useState(false);
 
   /**
@@ -207,6 +208,12 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
     const removed = await groupAdmin.removeMember(activeConversation.id, memberToRemove.id);
     if (removed) setMemberToRemove(null);
   }, [activeConversation, memberToRemove, groupAdmin]);
+
+  const handlePromoteMember = useCallback(async () => {
+    if (!activeConversation || !memberToPromote) return;
+    const promoted = await groupAdmin.promote(activeConversation.id, memberToPromote.id);
+    if (promoted) setMemberToPromote(null);
+  }, [activeConversation, memberToPromote, groupAdmin]);
 
   // Opening a conversation clears its badge.
   useEffect(() => {
@@ -363,7 +370,7 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
             onRename={(name) => groupAdmin.rename(activeConversation.id, name)}
             onAddMembers={() => setIsAddMembersOpen(true)}
             onRemoveMember={setMemberToRemove}
-            onPromote={(member) => void groupAdmin.promote(activeConversation.id, member.id)}
+            onPromote={setMemberToPromote}
             onLeave={() => setIsConfirmingLeave(true)}
             className="hidden w-80 shrink-0 border-l border-ink-100 xl:flex"
           />
@@ -403,7 +410,7 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
             onRename={(name) => groupAdmin.rename(activeConversation.id, name)}
             onAddMembers={() => setIsAddMembersOpen(true)}
             onRemoveMember={setMemberToRemove}
-            onPromote={(member) => void groupAdmin.promote(activeConversation.id, member.id)}
+            onPromote={setMemberToPromote}
             onLeave={() => setIsConfirmingLeave(true)}
             className="flex min-h-0 flex-1"
           />
@@ -418,6 +425,17 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
           isPending={groupAdmin.pending?.kind === 'add'}
           onAdd={(userIds) => groupAdmin.addMembers(activeConversation.id, userIds)}
           onClose={() => setIsAddMembersOpen(false)}
+        />
+      )}
+
+      {memberToPromote && activeConversation && (
+        <ConfirmDialog
+          title={`Make ${memberToPromote.name} an admin?`}
+          description={`They'll be able to rename ${activeConversation.title}, add and remove members, and promote others. This can't be undone — the API has no way to remove admin rights.`}
+          confirmLabel="Make admin"
+          isPending={groupAdmin.pending?.kind === 'promote'}
+          onConfirm={handlePromoteMember}
+          onCancel={() => setMemberToPromote(null)}
         />
       )}
 
