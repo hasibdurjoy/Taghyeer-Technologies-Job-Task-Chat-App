@@ -38,7 +38,8 @@ width you want, a third column of details on wide screens, and a message list th
 away from history you're reading.
 
 **The landing page** (`/`) — presents the product with an animated preview of the real chat UI,
-pointer-reactive lighting, and a button that plays the app's actual notification sound. Signed in, it
+pointer-reactive lighting, a walkthrough video of the running app, and a button that plays the app's
+actual notification sound. Signed in, it
 becomes a working client in its own right: your conversations hang off the header, and opening one
 docks a Messenger-style chat window in the corner — real history, real sending, real delivery.
 

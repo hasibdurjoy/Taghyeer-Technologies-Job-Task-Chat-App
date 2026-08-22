@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { CallToAction } from "@/components/landing/CallToAction";
+import { Demo } from "@/components/landing/Demo";
 import { Features } from "@/components/landing/Features";
 import { FloatingChatProvider } from "@/components/landing/FloatingChatProvider";
 import { Hero } from "@/components/landing/Hero";
@@ -23,6 +24,7 @@ export default function LandingPage() {
         <main className="flex-1">
           <Hero />
           <Features />
+          <Demo />
           <ScrollShowcase />
           <CallToAction />
         </main>
