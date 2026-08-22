@@ -122,7 +122,8 @@ export function MessageComposer({
           placeholder={`Message ${conversationTitle}`}
           className={cx(
             'scroll-subtle max-h-40 min-h-11 flex-1 resize-none rounded-2xl bg-paper px-4 py-2.5',
-            'text-[0.9375rem] leading-relaxed text-ink-900 ring-1 ring-inset ring-ink-200',
+            // 16px, not 15: iOS Safari zooms the viewport on focus below that.
+            'text-base leading-relaxed text-ink-900 ring-1 ring-inset ring-ink-200',
             'transition-shadow placeholder:text-ink-400 focus:outline-none focus:ring-2 focus:ring-ink-900',
           )}
         />

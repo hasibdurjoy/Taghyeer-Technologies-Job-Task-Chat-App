@@ -51,7 +51,9 @@ export function TextField({
           aria-invalid={error ? true : undefined}
           aria-describedby={cx(error ? errorId : undefined, hint ? hintId : undefined) || undefined}
           className={cx(
-            'h-11 w-full rounded-xl bg-surface px-3.5 text-[0.9375rem] text-ink-900',
+            // `text-base` is 16px on purpose: iOS Safari zooms the viewport when a
+            // focused field is any smaller, and never zooms back out.
+            'h-11 w-full rounded-xl bg-surface px-3.5 text-base text-ink-900',
             'ring-1 ring-inset transition-shadow placeholder:text-ink-400',
             'focus:outline-none focus:ring-2',
             Boolean(leadingIcon) && 'pl-10',
