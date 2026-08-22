@@ -1,10 +1,17 @@
 # Messengo
 
+**Live: [messengo-chat.vercel.app](https://messengo-chat.vercel.app)** · [Landing page](https://messengo-chat.vercel.app) · [Open the chat](https://messengo-chat.vercel.app/chat)
+
 A real-time messaging application — direct and group conversations, live delivery over
 WebSockets, and a message list built for actually reading — plus a landing page presenting it as a
 product.
 
 Built against the assignment's provided API at `https://frontend-task-chatapp.onrender.com`.
+
+> **One caveat on the live deployment.** It runs on Vercel, where the typing relay does not work —
+> see [Deployment](#deployment). Everything else on the live URL is fully functional; typing
+> indicators (and the typing sound that follows them) need a single long-running server, so
+> `npm start` locally shows that feature working.
 
 - [Project Overview](#project-overview)
 - [Tech Stack](#tech-stack)
@@ -116,13 +123,28 @@ NEXT_PUBLIC_SITE_URL=https://your-deployment.example.com
 `npm run build` passes with no TypeScript or ESLint errors. Every page is statically prerendered;
 the only server-side code is the two typing-relay Route Handlers.
 
-**One deployment caveat, and it's a real one.** The relay holds its subscribers in process memory, so
-it needs a **single long-running Node server** — `npm start`, Docker, Render, Railway, Fly, a VPS.
-On a serverless platform like Vercel, the publisher and the subscriber can land on different function
-instances that don't share memory, so **typing indicators would silently stop working there** (the
-rest of the app is unaffected and works fine). Making it serverless-ready means swapping the
-in-memory channel in [`lib/typing/registry.ts`](lib/typing/registry.ts) for an external broker —
-Redis pub/sub, Ably or Pusher — behind the same two functions.
+**One deployment caveat, and it is not hypothetical — it is happening on the live URL.** The relay
+holds its subscribers in process memory, so it needs a **single long-running Node server** —
+`npm start`, Docker, Render, Railway, Fly, a VPS. On a serverless platform the publisher and the
+subscriber land on different function instances that share no memory.
+
+The live deployment is on Vercel, and the relay suite confirms the consequence:
+
+```
+$ APP_URL=https://messengo-chat.vercel.app npm run verify:typing
+PASS  two users + a shared conversation
+FAIL  Bob should have received exactly 1 event, got 0
+```
+
+The same suite passes 9/9 against `localhost:3000`. So **typing indicators, and the typing sound
+that follows them, do not work on the live URL** — everything else there does: auth, search, direct
+and group conversations, real-time message delivery over the upstream socket, the arrival sound,
+drafts, retries, and the full landing page. Real-time messaging is unaffected because it rides the
+upstream API's own Socket.io server, not this relay.
+
+Two ways to close it: deploy to a single long-running Node host instead, or swap the in-memory
+channel in [`lib/typing/registry.ts`](lib/typing/registry.ts) for an external broker — Redis pub/sub,
+Ably or Pusher — behind the same two functions. The interface is already the right seam.
 
 ---
 
