@@ -97,7 +97,7 @@ export function Modal({ onClose, title, description, children, className }: Moda
           className,
         )}
       >
-        <header className="flex items-start justify-between gap-4 border-b border-ink-100 px-5 py-4 sm:px-6">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-ink-100 px-5 py-4 sm:px-6">
           <div className="min-w-0">
             <h2 id="modal-title" className="text-lg font-semibold tracking-tight text-ink-900">
               {title}

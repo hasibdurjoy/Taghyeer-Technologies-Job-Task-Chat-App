@@ -92,8 +92,8 @@ export function CreateGroupDialog({
       title="New group"
       description="Name the group and choose who's in it."
     >
-      <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-        <div className="space-y-4 border-b border-ink-100 px-5 py-4 sm:px-6">
+      <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="shrink-0 space-y-4 border-b border-ink-100 px-5 py-4 sm:px-6">
           <TextField
             label="Group name"
             placeholder="Weekend Plans"
@@ -126,30 +126,32 @@ export function CreateGroupDialog({
             />
 
             {selected.length > 0 && (
-              <ul className="mt-3 flex flex-wrap gap-1.5">
-                {selected.map((user) => (
-                  <li key={user.id}>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-ink-100 py-1 pl-1 pr-1 text-sm text-ink-900">
-                      <Avatar name={user.name} seed={user.id} size="sm" className="size-6 text-[0.625rem]" />
-                      <span className="max-w-32 truncate font-medium">{user.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => toggleParticipant(user)}
-                        aria-label={`Remove ${user.name} from the group`}
-                        disabled={isCreating}
-                        className="rounded-full p-1 text-ink-500 transition-colors hover:bg-ink-200 hover:text-ink-900"
-                      >
-                        <X aria-hidden className="size-3.5" />
-                      </button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <div className="scroll-subtle mt-3 max-h-20 overflow-y-auto overscroll-contain sm:max-h-24">
+                <ul aria-label="Selected members" className="flex flex-wrap gap-1.5">
+                  {selected.map((user) => (
+                    <li key={user.id}>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-ink-100 py-1 pl-1 pr-1 text-sm text-ink-900">
+                        <Avatar name={user.name} seed={user.id} size="sm" className="size-6 text-[0.625rem]" />
+                        <span className="max-w-[7rem] truncate font-medium sm:max-w-32">{user.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => toggleParticipant(user)}
+                          aria-label={`Remove ${user.name} from the group`}
+                          disabled={isCreating}
+                          className="rounded-full p-1 text-ink-500 transition-colors hover:bg-ink-200 hover:text-ink-900"
+                        >
+                          <X aria-hidden className="size-3.5" />
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
         </div>
 
-        <div className="scroll-subtle min-h-48 flex-1 overflow-y-auto py-2">
+        <div className="scroll-subtle min-h-0 flex-1 overflow-y-auto py-2">
           <UserSearchResults
             term={term}
             results={search.results}
@@ -164,14 +166,14 @@ export function CreateGroupDialog({
           />
         </div>
 
-        <footer className="border-t border-ink-100 px-5 py-4 sm:px-6">
+        <footer className="shrink-0 border-t border-ink-100 px-5 py-4 sm:px-6">
           {formError && (
             <p role="alert" className="mb-3 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">
               {formError}
             </p>
           )}
 
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-ink-500">
               {selected.length === 0
                 ? 'No one selected yet'
@@ -179,7 +181,7 @@ export function CreateGroupDialog({
                   ? `${selected.length} selected · add ${needed} more`
                   : `${selected.length + 1} members including you`}
             </p>
-            <div className="flex gap-2">
+            <div className="flex shrink-0 justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={onClose} disabled={isCreating}>
                 Cancel
               </Button>
