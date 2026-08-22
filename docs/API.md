@@ -1,24 +1,43 @@
 # API Reference
 
-Documentation for the chat backend at `https://frontend-task-chatapp.onrender.com`.
+The chat backend at `https://frontend-task-chatapp.onrender.com`.
 
-The upstream Swagger spec (`/docs/`) is **intentionally request-only** — it documents endpoints,
-methods, parameters and request bodies, but specifies **no response bodies and no status codes**.
-Everything documented below was derived by probing the live API: three throwaway accounts were
-created and used to exercise every endpoint, both success and failure paths, plus a real Socket.io
-session to observe the real-time events.
+The upstream Swagger spec at `/docs/` lists endpoints, methods and request bodies — but **no response
+bodies and no status codes**. Everything below was found by probing the live API: three throwaway
+accounts exercising every endpoint on both success and failure paths, plus a real Socket.io session
+to watch the events.
 
+- [Quick reference](#quick-reference)
 - [Conventions](#conventions)
-- [Auth](#auth)
-- [Users](#users)
-- [Conversations](#conversations)
-- [Messages](#messages)
-- [Groups](#groups)
-- [WebSocket (Socket.io)](#websocket-socketio)
-- [No typing / presence channel](#there-is-no-typing--presence-channel)
-- [This application's own endpoints](#this-applications-own-endpoints)
-- [Error format](#error-format)
-- [Known quirks](#known-quirks)
+- [Auth](#auth) · [Users](#users) · [Conversations](#conversations) · [Messages](#messages) · [Groups](#groups)
+- [Realtime](#realtime-socketio) · [There is no typing / presence channel](#there-is-no-typing--presence-channel)
+- [This app's own endpoints](#this-apps-own-endpoints)
+- [Errors](#errors) · [Known quirks](#known-quirks) · [Where each endpoint is used](#where-each-endpoint-is-used)
+
+---
+
+## Quick reference
+
+Every endpoint, at a glance. All need `Authorization: Bearer <jwt>` except login.
+
+| Method | Path | Does | Returns |
+|---|---|---|---|
+| `POST` | `/auth/login` | log in **or** register | `{token, user}` |
+| `GET` | `/auth/me` | current user from token | bare user |
+| `GET` | `/users/search?q=` | find people | bare array, max 50 |
+| `GET` | `/conversations` | your conversations | `{data: [...]}` |
+| `POST` | `/conversations` | start a 1-to-1 | sparse conversation |
+| `POST` | `/conversations/group` | create a group | full group |
+| `GET` | `/conversations/{id}/messages` | history, newest-first | `{messages, hasMore}` |
+| `POST` | `/messages` | send a message | the created message |
+| `PATCH` | `/conversations/{id}` | rename a group | updated group |
+| `POST` | `/conversations/{id}/participants` | add members | updated group |
+| `DELETE` | `/conversations/{id}/participants/{userId}` | remove a member | updated group |
+| `POST` | `/conversations/{id}/admins` | promote to admin | updated group |
+| `GET` | `/health` | health check (**at the root, not `/api`**) | `{status:"ok"}` |
+
+Socket.io, on the root origin: `message:new` and `conversation:updated` come down, `message:send`
+goes up.
 
 ---
 
@@ -26,28 +45,26 @@ session to observe the real-time events.
 
 | | |
 |---|---|
-| REST base URL | `https://frontend-task-chatapp.onrender.com/api` |
-| Socket.io origin | `https://frontend-task-chatapp.onrender.com` (**root**, not `/api`) |
-| Auth header | `Authorization: Bearer <jwt>` |
-| IDs | MongoDB ObjectId hex strings, returned as `_id` over REST |
-| Timestamps | ISO-8601 UTC strings over REST (`2026-08-21T17:33:09.103Z`) |
+| REST base | `https://frontend-task-chatapp.onrender.com/api` |
+| Socket.io | `https://frontend-task-chatapp.onrender.com` — the **root**, no `/api` |
+| Auth | `Authorization: Bearer <jwt>` |
+| IDs | Mongo ObjectId hex strings, sent as `_id` |
+| Timestamps | ISO-8601 UTC over REST — but **epoch milliseconds over the socket** |
 
-Both are configurable in this app via `NEXT_PUBLIC_API_BASE_URL` and `NEXT_PUBLIC_SOCKET_URL`.
+Both URLs are configurable here via `NEXT_PUBLIC_API_BASE_URL` and `NEXT_PUBLIC_SOCKET_URL`.
 
-### Response envelopes are inconsistent
+**There is no single response envelope.** Four shapes are in play:
 
-There is no single envelope. Each shape below is real and must be handled:
-
-| Endpoint | Envelope |
+| Endpoint | Wrapped in |
 |---|---|
-| `GET /conversations` | `{ "data": [ … ] }` |
-| `GET /conversations/{id}/messages` | `{ "messages": [ … ], "hasMore": bool }` |
-| `GET /users/search` | bare array `[ … ]` |
-| everything else | bare object |
+| `GET /conversations` | `{"data": [...]}` |
+| `GET /conversations/{id}/messages` | `{"messages": [...], "hasMore": bool}` |
+| `GET /users/search` | a bare array |
+| everything else | a bare object |
 
-The frontend normalizes all of these in [`lib/api/http.ts`](../lib/api/http.ts) and
-[`lib/api/normalize.ts`](../lib/api/normalize.ts) so that UI code only ever sees the domain types in
-[`types/chat.ts`](../types/chat.ts) — notably `_id` is normalized to `id` and all timestamps to ISO strings.
+All four are unwrapped in [`lib/api/http.ts`](../lib/api/http.ts), and `_id` → `id` plus timestamp
+normalization happen in [`lib/api/normalize.ts`](../lib/api/normalize.ts). UI code only ever sees the
+types in [`types/chat.ts`](../types/chat.ts).
 
 ---
 
@@ -55,75 +72,37 @@ The frontend normalizes all of these in [`lib/api/http.ts`](../lib/api/http.ts) 
 
 ### `POST /auth/login`
 
-Login and registration in a single step. If the phone number is unknown an account is created; if it
-already exists the user is logged in. No separate signup flow exists. **Not authenticated.**
+Login and registration in one call. Unknown phone → account created. Known phone → logged in. There
+is no separate signup. **No auth required.**
 
-**Request**
+```jsonc
+→ { "phone": "+15551234567", "name": "Ada Lovelace" }
 
-```json
-{ "phone": "+15551234567", "name": "Ada Lovelace" }
-```
-
-Both fields are required.
-
-**Response `200`**
-
-```json
+← 200
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "_id": "6a888bc2e5d6aac97523ae13",
-    "name": "Ada Lovelace",
-    "phone": "+15550109945",
-    "createdAt": "2026-08-21T17:32:50.428Z"
-  }
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "user": { "_id": "6a888bc2...", "name": "Ada Lovelace",
+            "phone": "+15550109945", "createdAt": "2026-08-21T17:32:50.428Z" }
 }
 ```
 
-The JWT payload is `{ "sub": "<userId>", "iat": …, "exp": … }` with a **7 day** lifetime. It is signed
-with a secret we do not hold, so the token can only be validated by calling the API.
+- JWT payload is `{sub, iat, exp}`, **7-day** lifetime. It is signed with a secret we don't hold, so
+  a token can only be validated by calling the API.
+- `400 VALIDATION_ERROR` — a missing or empty field, with the offending field in `details[]`.
 
-**Errors**
-
-| Status | Body | Cause |
-|---|---|---|
-| `400` | `{"error":{"message":"Validation failed","code":"VALIDATION_ERROR","details":[{"path":"name","message":"Required"}]}}` | missing field |
-| `400` | `…"details":[{"path":"phone","message":"phone is required"}]` | empty phone |
-
-**Frontend usage** — [`lib/api/auth.ts`](../lib/api/auth.ts) `login()`, called from the login form.
-The token and user are persisted to `localStorage` by [`lib/auth/session.ts`](../lib/auth/session.ts).
-
-> **Note:** logging in with an existing phone but a different name **overwrites the stored display
-> name**. This is upstream behaviour, not a bug in this app.
+> ⚠️ Logging in with an existing phone but a **different name overwrites the stored display name**.
+> Upstream behaviour, not a bug here.
 
 ### `GET /auth/me`
 
-Returns the user for the bearer token. Used to restore a session on page load and to validate tokens
-server-side.
+The user behind the token. Used to restore a session on load.
 
-**Response `200`** — a bare user object (no envelope):
-
-```json
-{
-  "_id": "6a888bc2e5d6aac97523ae13",
-  "name": "Ada Lovelace",
-  "phone": "+15550109945",
-  "createdAt": "2026-08-21T17:32:50.428Z"
-}
+```jsonc
+← 200  { "_id": "...", "name": "...", "phone": "...", "createdAt": "..." }   // bare, no envelope
 ```
 
-**Errors**
-
-| Status | Body | Cause |
-|---|---|---|
-| `400` | `{"error":{"message":"No token provided","code":"NO_TOKEN"}}` | header absent |
-| `401` | `{"error":{"message":"Invalid token","code":"INVALID_TOKEN"}}` | malformed/expired token |
-
-Note the inconsistency: a *missing* token is `400`, not `401`. The app treats both as
-"unauthenticated" (see [`lib/api/http.ts`](../lib/api/http.ts)).
-
-**Frontend usage** — [`lib/api/auth.ts`](../lib/api/auth.ts) `getMe()`, called on app boot to
-rehydrate the session and revalidate a stored token on boot.
+- `400 NO_TOKEN` — header absent. Note: **not** a `401`.
+- `401 INVALID_TOKEN` — malformed or expired.
 
 ---
 
@@ -131,44 +110,32 @@ rehydrate the session and revalidate a stored token on boot.
 
 ### `GET /users/search?q=<term>`
 
-Searches users by name or phone.
-
-**Response `200`** — bare array, **capped at 50 results**:
-
-```json
-[
-  { "_id": "6a888bc3e5d6aac97523ae1b", "name": "Grace Probe", "phone": "+15550209945" }
-]
+```jsonc
+← 200  [ { "_id": "...", "name": "Grace Probe", "phone": "+15550209945" } ]   // bare array
 ```
 
-No results is `200` with `[]`. An **empty or omitted `q` returns the first 50 users** rather than an
-error — the app treats a blank query as "don't search".
+Capped at **50 results**, silently. No matches is `200` with `[]`. An **empty `q` returns the first
+50 users** rather than an error.
 
-**Matching semantics** (established by probing — not documented upstream):
+**How matching actually works** — probed, not documented:
 
 | Field | Behaviour | Evidence |
 |---|---|---|
-| `name` | prefix-anchored regex, **case-sensitive** | `Grace` → 33 hits, `race` → 0, `grace` → 0 |
-| `phone` | **exact string equality** | `01672589498` → 1 hit, `0167` → 0, `6725` → 0 |
+| `name` | prefix-anchored regex, **case-sensitive** | `Grace` → 33 hits · `race` → 0 · `grace` → 0 |
+| `phone` | **exact string equality** | `01672589498` → 1 hit · `0167` → 0 |
 
-`q` is interpolated **directly into a MongoDB regex** with no escaping, so regex metacharacters are
-executed (`.*` and `^` match everything, `(?i)grace` performs a case-insensitive match) and invalid
-patterns crash the server:
+**`q` goes straight into a MongoDB regex unescaped.** Metacharacters execute, and invalid patterns
+crash the server with a *numeric* code:
 
-| `q` | Status | Body |
-|---|---|---|
-| `+15550209945` | `500` | `{"error":{"message":"Regular expression is invalid: quantifier does not follow a repeatable item","code":51091}}` |
-| `(` | `500` | `…"missing closing parenthesis","code":51091` |
-| `*`, `?` | `500` | `…"quantifier does not follow a repeatable item"` |
+| `q` | Result |
+|---|---|
+| `+15550209945` | `500` — `"quantifier does not follow a repeatable item"`, code `51091` |
+| `(` | `500` — `"missing closing parenthesis"` |
+| `.*` or `^` | matches everything |
 
-> **Consequence:** a phone number in E.164 format (`+1555…`) **can never be found**. The leading `+`
-> crashes the name-regex compile before the phone equality check is ever reached, and no escaping
-> works because the same raw `q` is used for both the regex *and* the exact match. See
-> [Known quirks](#known-quirks) for how the frontend mitigates this.
-
-**Frontend usage** — [`lib/api/users.ts`](../lib/api/users.ts) `searchUsers()`. It builds a small set
-of safe query variants (raw when regex-safe, a capitalized variant to work around case-sensitivity,
-and a digits-only variant for phones), runs them concurrently, and merges results by id.
+> ⚠️ **A `+`-prefixed phone number can never be found.** The `+` crashes the regex compile before the
+> phone equality check is reached, and escaping doesn't help — the same raw `q` feeds both the regex
+> *and* the exact match. Mitigation in [quirk #9](#known-quirks).
 
 ---
 
@@ -176,91 +143,48 @@ and a digits-only variant for phones), runs them concurrently, and merges result
 
 ### `GET /conversations`
 
-All conversations the current user belongs to, direct and group, **sorted by `updatedAt` descending**.
+Everything you belong to, direct and group, sorted by `updatedAt` descending.
 
-**Response `200`**
+```jsonc
+← 200
+{ "data": [
+    { "_id": "...", "type": "group", "name": "Probe Team",
+      "createdBy": "...", "admins": ["..."],
+      "participants": [ {"_id":"...", "name":"Ada", "phone":"..."}, ... ],   // includes you
+      "lastMessage": { "text": "Hi group", "sender": "<id>", "createdAt": "..." },
+      "updatedAt": "..." },
 
-```json
-{
-  "data": [
-    {
-      "_id": "6a888bdfe5d6aac97523af3b",
-      "type": "group",
-      "name": "Probe Team",
-      "createdBy": "6a888bc2e5d6aac97523ae13",
-      "admins": ["6a888bc2e5d6aac97523ae13"],
-      "participants": [
-        { "_id": "6a888bc2e5d6aac97523ae13", "name": "Ada", "phone": "+15550109945" },
-        { "_id": "6a888bc3e5d6aac97523ae1b", "name": "Grace", "phone": "+15550209945" }
-      ],
-      "lastMessage": {
-        "text": "Hi group",
-        "sender": "6a888bc3e5d6aac97523ae1b",
-        "createdAt": "2026-08-21T17:33:21.746Z"
-      },
-      "updatedAt": "2026-08-21T17:33:21.981Z"
-    },
-    {
-      "_id": "6a888bcfe5d6aac97523ae86",
-      "type": "direct",
-      "participant": {
-        "_id": "6a888bc3e5d6aac97523ae1b",
-        "name": "Grace Probe",
-        "phone": "+15550209945"
-      },
-      "lastMessage": { "text": "See you", "sender": "…", "createdAt": "…" },
-      "updatedAt": "2026-08-21T17:33:11.763Z"
-    }
-  ]
-}
+    { "_id": "...", "type": "direct",
+      "participant": { "_id":"...", "name":"Grace Probe", "phone":"..." },   // singular, the OTHER user
+      "lastMessage": { ... }, "updatedAt": "..." }
+] }
 ```
 
-Shape differences that matter:
+Four things to watch:
 
-- `type` is `"direct"` or `"group"`.
-- **Direct** conversations carry `participant` (singular, the *other* user, already populated).
-  **Group** conversations carry `participants` (plural, includes you) plus `name`, `admins`, `createdBy`.
-- `lastMessage` is **`{}` when the conversation has no messages yet**, not `null`.
-- `lastMessage.sender` is an **id string**, not a populated user.
-- There is **no unread count and no read state** anywhere in this payload.
-
-**Frontend usage** — [`lib/api/conversations.ts`](../lib/api/conversations.ts) `listConversations()`,
-consumed by [`hooks/useConversations.ts`](../hooks/useConversations.ts). Normalized into a single
-`Conversation` type with a computed `title`, so `ConversationItem` never branches on `type` for data
-access.
+- **Direct** carries `participant` (singular, the other person). **Group** carries `participants`
+  (plural, includes you) plus `name`, `admins`, `createdBy`.
+- `lastMessage` is **`{}` when there are no messages** — not `null`.
+- `lastMessage.sender` is an **id string**, never a populated user.
+- There is **no unread count and no read state** anywhere.
 
 ### `POST /conversations`
 
-Start (or re-open) a 1-to-1 conversation. **Idempotent** — calling it twice with the same `userId`
-returns the identical conversation, so the frontend never needs a "does it already exist" check.
+Start or re-open a 1-to-1. **Idempotent** — same `userId` twice returns the same conversation, so no
+"does it exist already" check is needed.
 
-**Request** — `{ "userId": "665f0c2a9b1e4a0012ab34cd" }`
+```jsonc
+→ { "userId": "665f0c2a9b1e4a0012ab34cd" }
 
-**Response `200`** — a **bare, sparse** conversation. Note it has **no `type`, no populated
-participant and no `lastMessage`** — it is *not* the same shape as an item from `GET /conversations`:
-
-```json
-{
-  "_id": "6a888bcfe5d6aac97523ae86",
-  "participants": ["6a888bc2e5d6aac97523ae13", "6a888bc3e5d6aac97523ae1b"],
-  "createdAt": "2026-08-21T17:33:03.455Z"
-}
+← 200  { "_id": "...", "participants": ["<id>","<id>"], "createdAt": "..." }
 ```
 
-**Errors**
+> ⚠️ That response is **sparse** — no `type`, no populated participant, no `lastMessage`. It is *not*
+> the shape `GET /conversations` returns, so it can't be dropped straight into the sidebar
+> ([quirk #12](#known-quirks)).
 
-| Status | Body | Cause |
-|---|---|---|
-| `400` | `{"error":{"message":"One or more users do not exist","code":"UNKNOWN_USER"}}` | valid ObjectId, no such user |
-| `500` | `{"error":{"message":"Cast to ObjectId failed …","code":"SERVER_ERROR"}}` | malformed id |
-
-**Frontend usage** — [`lib/api/conversations.ts`](../lib/api/conversations.ts) `startDirectConversation()`.
-Because the response is sparse, the app refreshes the conversation list after creating one rather than
-trying to insert the partial object into the sidebar.
-
-### `GET /conversations/{id}/messages`
-
-See [Messages](#messages).
+- `400 UNKNOWN_USER` — well-formed id, no such user.
+- `500 SERVER_ERROR` — malformed id (`Cast to ObjectId failed`).
 
 ---
 
@@ -268,342 +192,241 @@ See [Messages](#messages).
 
 ### `GET /conversations/{id}/messages?limit=&before=`
 
-Paginated message history.
+`limit` is the page size, `before` is a message id used as a cursor. Both optional.
 
-| Param | In | Required | Notes |
-|---|---|---|---|
-| `id` | path | yes | conversation id |
-| `limit` | query | no | page size |
-| `before` | query | no | cursor — a message id |
-
-**Response `200`** — messages are returned **newest-first (descending)**:
-
-```json
-{
-  "messages": [
-    {
-      "_id": "6a888bd7e5d6aac97523aef4",
-      "conversation": "6a888bcfe5d6aac97523ae86",
-      "sender": "6a888bc2e5d6aac97523ae13",
-      "text": "Hello",
-      "createdAt": "2026-08-21T17:33:11.528Z"
-    }
+```jsonc
+← 200
+{ "messages": [
+    { "_id": "...", "conversation": "...", "sender": "<id>",
+      "text": "Hello", "createdAt": "2026-08-21T17:33:11.528Z" }
   ],
-  "hasMore": true
-}
+  "hasMore": true }
 ```
 
-`sender` is an **id string**, never a populated user — the frontend resolves names from the
+Messages come back **newest-first**. `sender` is an id, never populated — names are resolved from the
 conversation's participants.
 
-**Errors**
+> ⚠️ **Two pagination traps, both verified.** `before=X` is **inclusive**, so X comes back again as
+> the first item of the next page ([quirk #4](#known-quirks)). And an **invalid `before` is silently
+> ignored**, returning page 1 again — a naive "load older" loop would never terminate
+> ([quirk #5](#known-quirks)).
 
-| Status | Body | Cause |
-|---|---|---|
-| `404` | `{"error":{"message":"Conversation not found","code":"NOT_FOUND"}}` | unknown id |
-| `403` | `{"error":{"message":"Not a participant of this conversation","code":"FORBIDDEN"}}` | not a member |
-
-**Pagination caveats** — both verified:
-
-- The `before` cursor is **inclusive**: requesting `before=X` returns `X` again as the first item, so
-  every page after the first duplicates one message.
-- An **invalid `before` is silently ignored** and page 1 is returned again, which would loop forever
-  in a naive "load older" implementation.
-
-The frontend handles both in [`hooks/useMessages.ts`](../hooks/useMessages.ts): pages are reversed to
-ascending order, merged through an id-keyed map that drops duplicates, and paging stops when a page
-yields no genuinely new messages.
-
-**Frontend usage** — [`lib/api/messages.ts`](../lib/api/messages.ts) `getMessages()`.
+- `404 NOT_FOUND` — unknown conversation · `403 FORBIDDEN` — not a member.
 
 ### `POST /messages`
 
-Send a message to a direct or group conversation.
+```jsonc
+→ { "conversationId": "...", "text": "Hello!" }
 
-**Request** — `{ "conversationId": "…", "text": "Hello!" }`
-
-**Response `200`** — the created message, same shape as a history item:
-
-```json
-{
-  "_id": "6a888bd5e5d6aac97523aecf",
-  "conversation": "6a888bcfe5d6aac97523ae86",
-  "sender": "6a888bc2e5d6aac97523ae13",
-  "text": "Hello from probe 1",
-  "createdAt": "2026-08-21T17:33:09.103Z"
-}
+← 200  { "_id": "...", "conversation": "...", "sender": "...", "text": "Hello!", "createdAt": "..." }
 ```
 
-**Errors** — `404 NOT_FOUND` for an unknown conversation, `403 FORBIDDEN` if not a participant.
+Same shape as a history item — which is why this app sends over **REST rather than the socket**: the
+real id comes straight back, so an optimistic bubble can be reconciled cleanly.
 
-> **No text validation upstream.** `text: "   "` and `text: ""` are both accepted and stored,
-> returning `200`. The frontend rejects empty/whitespace-only input before sending.
+> ⚠️ **No text validation upstream.** `""` and `"   "` are both accepted and stored, returning `200`.
 
-**Frontend usage** — [`lib/api/messages.ts`](../lib/api/messages.ts) `sendMessage()`. The app sends
-over **REST rather than the socket** because REST returns the created message, which lets an
-optimistic bubble be reconciled with its real id. See [WebSocket](#websocket-socketio).
+- `404 NOT_FOUND` · `403 FORBIDDEN`.
 
 ---
 
 ## Groups
 
-A conversation is a group when it has **three or more members**. The creator becomes the first admin.
+A conversation is a group at **three or more members**. The creator becomes the first admin.
 
 ### `POST /conversations/group`
 
-**Request**
+```jsonc
+→ { "name": "Project Team", "participantIds": ["<id>", "<id>"] }   // excludes you, min 2
 
-```json
-{ "name": "Project Team", "participantIds": ["<id>", "<id>"] }
+← 201  full group, participants populated, admins: [creatorId]
 ```
 
-`participantIds` excludes you, and must contain **at least 2** ids (3 members total).
-
-**Response `201`** — the full group, with `participants` populated and `admins` set to `[creatorId]`
-(same shape as a group item from `GET /conversations`, minus `lastMessage`).
-
-**Errors**
-
-```json
-{
-  "error": {
-    "message": "Validation failed",
-    "code": "VALIDATION_ERROR",
-    "details": [{ "path": "participantIds", "message": "a group needs at least 3 members" }]
-  }
-}
-```
-
-**Frontend usage** — [`lib/api/conversations.ts`](../lib/api/conversations.ts) `createGroup()`. The
-create-group dialog enforces the ≥2 rule client-side so the error is prevented rather than reported,
-and surfaces upstream `details[]` inline if it still occurs.
+Fewer than 2 ids gives `400 VALIDATION_ERROR` with
+`details: [{path: "participantIds", message: "a group needs at least 3 members"}]`.
 
 ### Group administration
 
-All admin-only; a non-admin receives `403 FORBIDDEN` (e.g. `"Only admins can rename the group"`).
+All admin-only — a non-admin gets `403 FORBIDDEN`. All return the updated group and broadcast
+`conversation:updated`.
 
-| Method | Path | Body | Purpose |
+| Method | Path | Body | Does |
 |---|---|---|---|
-| `POST` | `/conversations/{id}/participants` | `{ "userIds": ["…"] }` | add members |
-| `DELETE` | `/conversations/{id}/participants/{userId}` | — | remove a member; **your own id leaves the group** |
-| `POST` | `/conversations/{id}/admins` | `{ "userId": "…" }` | promote to admin |
-| `PATCH` | `/conversations/{id}` | `{ "name": "…" }` | rename group |
-
-All return the updated group object. Each also broadcasts `conversation:updated` over the socket.
+| `POST` | `/conversations/{id}/participants` | `{userIds: []}` | add members |
+| `DELETE` | `/conversations/{id}/participants/{userId}` | — | remove a member — **your own id leaves the group** |
+| `POST` | `/conversations/{id}/admins` | `{userId}` | promote to admin |
+| `PATCH` | `/conversations/{id}` | `{name}` | rename |
 
 ---
 
-## WebSocket (Socket.io)
+## Realtime (Socket.io)
 
-Real-time is genuine Socket.io — **verified working**, so this app uses **no polling at all**.
-
-Connect to the **root origin**, not the `/api` base (Socket.io serves itself from `/socket.io/`):
+Real Socket.io, verified working — so this app does **no polling at all**. Connect to the root
+origin; Socket.io serves itself from `/socket.io/`.
 
 ```ts
-import { io } from 'socket.io-client'
 const socket = io('https://frontend-task-chatapp.onrender.com', { auth: { token } })
 ```
 
-An invalid or missing token is rejected with a `connect_error` carrying `message: "Invalid token"`.
-
-### Events
+A bad or missing token is rejected at the handshake with `connect_error` / `"Invalid token"`.
 
 | Direction | Event | Payload |
 |---|---|---|
-| client → server | `message:send` | `{ conversationId, text }`, optional ack |
-| server → client | `message:new` | the new message |
-| server → client | `conversation:updated` | a group you belong to was created/renamed/changed |
+| → server | `message:send` | `{conversationId, text}`, optional ack |
+| ← server | `message:new` | the new message |
+| ← server | `conversation:updated` | a group you're in was created, renamed or changed |
 
-**`message:send` ack** — `{ "ok": true }` on success, `{ "ok": false, "error": "Conversation not found" }`
-on failure. The ack **does not include the created message**.
+The `message:send` ack is `{ok: true}` or `{ok: false, error}` — it does **not** include the created
+message.
 
-**`message:new` payload** — note this differs from every REST message shape:
-
-```json
-{
-  "id": "6a888d77e5d6aac97523bbce",
-  "conversation": "6a888bcfe5d6aac97523ae86",
-  "sender": "6a888bc3e5d6aac97523ae1b",
-  "text": "REST from B",
-  "createdAt": 1787334007888
-}
+```jsonc
+// message:new — note this differs from every REST message shape
+{ "id": "...", "conversation": "...", "sender": "...", "text": "REST from B",
+  "createdAt": 1787334007888 }        // ← `id` not `_id`, epoch ms not ISO
 ```
 
-`id` instead of `_id`, and `createdAt` is an **epoch-milliseconds number** instead of an ISO string.
-[`lib/api/normalize.ts`](../lib/api/normalize.ts) reconciles both into one `Message` type.
+**Two behaviours that shaped the whole design:**
 
-**`conversation:updated` payload** — the full group conversation object (with `_id`, `participants`
-populated, `admins`), without `lastMessage`. Delivered to all members including the actor.
+1. **The sender never receives their own `message:new`.** Verified both directions. So optimistic UI
+   **cannot** produce a duplicate — there's no echo to de-duplicate against. It also means the sender
+   has to update their own sidebar preview locally, since no event will arrive to do it.
+2. **REST-sent messages broadcast identically** to socket-sent ones. So this app sends over REST and
+   uses the socket purely for receiving.
 
-### Two behaviours that shape the design
-
-1. **The sender never receives their own `message:new`.** Verified in both directions: when A sends,
-   only B receives the event, and vice-versa. This means **optimistic UI cannot produce a duplicate
-   bubble** — there is no echo to de-duplicate against. It also means the sender must update their own
-   sidebar preview locally, because no event will arrive to do it for them.
-2. **Messages sent over REST are broadcast identically** to messages sent over the socket. So the app
-   sends over REST (which returns the created message with its real id, enabling clean optimistic
-   reconciliation) and uses the socket purely for *receiving*.
-
-> The socket does **not** validate text either: `message:send` with `text: ""` returns `{ok:true}` and
+> The socket doesn't validate text either — `message:send` with `text: ""` returns `{ok:true}` and
 > broadcasts an empty message.
-
-**Frontend usage** — [`hooks/useRealtime.ts`](../hooks/useRealtime.ts) owns a single shared connection
-for the whole app, exposes connection status, and refetches on reconnect to close any gap of messages
-missed while disconnected.
 
 ### There is no typing / presence channel
 
-Worth recording explicitly, because "user is typing…" is the obvious next feature and the API cannot
-support it. This was probed directly rather than assumed:
+Worth recording in full, because "user is typing…" is the obvious next feature and the API cannot
+carry it. This was **probed, not assumed**:
 
-- **Socket**: ten candidate event names were emitted with ack callbacks from an authenticated
-  connection — `typing`, `typing:start`, `typing:stop`, `user:typing`, `message:typing`,
-  `conversation:typing`, `startTyping`, `stopTyping`, `typing:new`, `is-typing`. **Every one received
-  no ack**, and a second socket belonging to the other participant, listening with `onAny`, received
-  **nothing** in any case. The server does not relay arbitrary client events; it only emits the two
-  events above.
-- **REST**: `POST /typing`, `POST /conversations/{id}/typing`, `POST /conversations/{id}/presence`,
-  `POST /presence` and `POST /events` all return `404 NOT_FOUND`. There is no SSE stream either.
+- **Socket** — ten candidate events emitted with ack callbacks from an authenticated connection:
+  `typing`, `typing:start`, `typing:stop`, `user:typing`, `message:typing`, `conversation:typing`,
+  `startTyping`, `stopTyping`, `typing:new`, `is-typing`. **Every one got no ack**, and a second
+  socket belonging to the other participant, listening with `onAny`, received **nothing** in any
+  case. The server does not relay arbitrary client events.
+- **REST** — `POST /typing`, `/conversations/{id}/typing`, `/conversations/{id}/presence`,
+  `/presence` and `/events` all return `404`. There is no SSE stream either.
 
-The only member-wide broadcast reachable from a client is `PATCH /conversations/{id}`, which fires
-`conversation:updated` — but it renames the group as a side effect, so it is not usable as a
-signalling channel.
+The only member-wide broadcast a client can trigger is `PATCH /conversations/{id}` → but it renames
+the group as a side effect, so it's useless as a signalling channel.
 
-**Consequence:** a typing indicator cannot be built on this API alone. Since the feature was wanted,
-the app runs a **small relay of its own** for typing signals only — documented below under
-[This application's own endpoints](#this-applications-own-endpoints). Nothing about it is simulated:
-what one user sees is another user's keystrokes. Everything else still goes through the provided API
-untouched.
+**So a typing indicator cannot be built on this API alone.** Since the feature was wanted, this app
+runs a small relay of its own, below. Nothing is simulated — what one user sees is another user's
+keystrokes — and all chat data still goes through the provided API untouched.
 
 ---
 
-## Error format
+## This app's own endpoints
 
-Errors are consistently shaped, which is genuinely helpful:
+**Not part of the upstream API.** They exist only because of the gap above, and they carry **typing
+signals only** — no user, conversation or message data, and nothing is stored. A signal is fanned out
+to whoever is listening right now, then discarded.
 
-```json
-{ "error": { "message": "Not a participant of this conversation", "code": "FORBIDDEN" } }
+| Method | Path | Does |
+|---|---|---|
+| `POST` | `/api/typing` | announce you started or stopped typing |
+| `GET` | `/api/typing/stream?conversationId=` | SSE stream of *other* participants' signals |
+
+Both take the same bearer token. It's validated by calling upstream `GET /auth/me` (we hold no
+signing secret), and membership is checked against upstream `GET /conversations`. Both are cached
+in-process — 60s and 30s — so a burst of keystrokes doesn't become a burst of upstream requests.
+
+```jsonc
+// POST /api/typing
+→ { "conversationId": "...", "isTyping": true }
+← 204   no body — fire and forget
+        400 bad conversationId or non-boolean isTyping · 401 bad token · 403 not a participant
+
+// GET /api/typing/stream?conversationId=...
+← data: {"conversationId":"...","userId":"...","name":"Ada Lovelace","isTyping":true}
 ```
 
-Validation errors add `details`:
+Comment frames (`: connected`, `: ping`) go out on open and every 25s so intermediaries don't drop an
+idle connection. **A signal never goes back to its author** — the same rule the upstream socket
+follows for `message:new`, which keeps client logic uniform.
 
-```json
-{
-  "error": {
-    "message": "Validation failed",
-    "code": "VALIDATION_ERROR",
-    "details": [{ "path": "participantIds", "message": "a group needs at least 3 members" }]
-  }
-}
+The client reads this with `fetch` and a stream reader rather than `EventSource`, because
+`EventSource` can't set an `Authorization` header, and a JWT in the query string would leak into
+access logs and browser history.
+
+> **Deployment note.** Subscribers live in process memory, so this needs a **single long-running Node
+> server** — `next start`, Docker, Render, Railway, a VPS. On serverless the publisher and subscriber
+> can land on different instances and signals are never delivered. Confirmed on the live Vercel
+> deployment; see the README's Deployment section. The fix is an external broker (Redis, Ably,
+> Pusher) behind the same interface in [`lib/typing/registry.ts`](../lib/typing/registry.ts).
+
+---
+
+## Errors
+
+Consistently shaped, which is genuinely helpful:
+
+```jsonc
+{ "error": { "message": "Not a participant of this conversation", "code": "FORBIDDEN" } }
+
+// validation errors add details[]
+{ "error": { "message": "Validation failed", "code": "VALIDATION_ERROR",
+             "details": [{ "path": "participantIds", "message": "a group needs at least 3 members" }] } }
 ```
 
 | `code` | Status | Meaning |
 |---|---|---|
-| `VALIDATION_ERROR` | 400 | bad request body; see `details[]` |
+| `VALIDATION_ERROR` | 400 | bad body — see `details[]` |
 | `NO_TOKEN` | **400** | `Authorization` header missing |
 | `INVALID_TOKEN` | 401 | malformed or expired JWT |
-| `FORBIDDEN` | 403 | not a participant / not an admin |
+| `FORBIDDEN` | 403 | not a participant, or not an admin |
 | `NOT_FOUND` | 404 | unknown conversation or route |
-| `UNKNOWN_USER` | 400 | referenced user id does not exist |
-| `SERVER_ERROR` | 500 | unhandled upstream error (e.g. ObjectId cast failure) |
-| `51091` | 500 | **numeric** code — MongoDB invalid-regex error from `/users/search` |
+| `UNKNOWN_USER` | 400 | referenced user id doesn't exist |
+| `SERVER_ERROR` | 500 | unhandled upstream error |
+| `51091` | 500 | **numeric** — Mongo invalid-regex, from `/users/search` |
 
-`code` is therefore `string | number`, typed accordingly in [`types/api.ts`](../types/api.ts). All
-error responses are parsed into a single `ApiError` class in [`lib/api/http.ts`](../lib/api/http.ts),
-so UI components never inspect raw response bodies.
-
-### `GET /health`
-
-Documented in the Swagger spec under the `/api` server, but actually served at the **root**:
-`https://frontend-task-chatapp.onrender.com/health` → `{"status":"ok"}`. Under `/api` it returns
-`404 NOT_FOUND`.
+`code` is therefore `string | number`, typed that way in [`types/api.ts`](../types/api.ts). Every
+error is parsed into one `ApiError` class in [`lib/api/http.ts`](../lib/api/http.ts), so no component
+ever inspects a raw response body.
 
 ---
 
 ## Known quirks
 
-A consolidated list of upstream behaviours this frontend works around. Each is handled in exactly one
-place so the rest of the codebase stays clean.
+Every upstream behaviour this frontend works around. Each is handled in exactly one place, so the
+rest of the codebase stays clean.
 
-| # | Quirk | Handling |
+| # | Quirk | Handled by |
 |---|---|---|
-| 1 | Socket messages use `id` + epoch `createdAt`; REST uses `_id` + ISO string | single normalizer in `lib/api/normalize.ts` |
+| 1 | Socket uses `id` + epoch `createdAt`; REST uses `_id` + ISO | one normalizer, `lib/api/normalize.ts` |
 | 2 | Three different response envelopes | unwrapped in `lib/api/http.ts` |
-| 3 | Message history is newest-first | reversed to ascending once, in `useMessages` |
-| 4 | `before` cursor is inclusive → duplicate per page | id-keyed merge drops duplicates |
+| 3 | History is newest-first | reversed once, in `useMessages` |
+| 4 | `before` cursor is inclusive → a duplicate per page | id-keyed merge drops duplicates |
 | 5 | Invalid `before` silently returns page 1 | paging stops when a page adds nothing new |
-| 6 | Empty / whitespace-only text is accepted | client-side validation before send |
-| 7 | Search `q` is an unescaped regex → `500` on `+ * ? (` | metacharacters stripped for name variants; the numeric `51091` error is caught and shown as a friendly message |
-| 8 | Search is case-sensitive and prefix-anchored | a capitalized variant is queried alongside the raw term |
-| 9 | **Phone search is impossible for `+`-prefixed numbers** | a digits-only variant is also queried (matches users stored without `+`); the UI explains that a phone must be entered exactly as registered |
-| 10 | Search silently caps at 50 results | UI notes when a result set is truncated |
-| 11 | Sender receives no `message:new` echo | optimistic send + local sidebar update |
-| 12 | `POST /conversations` returns a sparse object | conversation list refreshed after creation |
-| 13 | `POST /conversations` with your own id returns an unrelated conversation | self is excluded from search results |
-| 14 | `lastMessage` is `{}`, not `null`, when empty | treated as absent during normalization |
+| 6 | Empty / whitespace text accepted | client-side validation before send |
+| 7 | Search `q` is an unescaped regex → `500` on `+ * ? (` | metacharacters stripped; numeric `51091` caught and shown as a friendly message |
+| 8 | Search is case-sensitive, prefix-anchored | a capitalized variant queried alongside the raw term |
+| 9 | **`+`-prefixed phones are unfindable** | a digits-only variant is queried too; UI explains the number must match how it was registered |
+| 10 | Search silently caps at 50 | UI says when results are truncated |
+| 11 | Sender gets no `message:new` echo | optimistic send + local sidebar update |
+| 12 | `POST /conversations` returns a sparse object | list refreshed after creation, not patched |
+| 13 | `POST /conversations` with your own id returns an unrelated conversation | self excluded from search results |
+| 14 | `lastMessage` is `{}`, not `null` | treated as absent in normalization |
 | 15 | Missing token is `400`, not `401` | both mapped to "unauthenticated" |
-| 16 | Re-login overwrites the display name | documented; the login form pre-fills the last used name |
-| 17 | No unread/read state in the API | unread badges are tracked in-session only; see README → Architecture |
-| 18 | No typing / presence channel of any kind | typing signals travel over this app's own SSE relay, not the upstream socket |
+| 16 | Re-login overwrites the display name | documented; login form pre-fills the last used name |
+| 17 | No unread or read state in the API | unread badges tracked in-session only |
+| 18 | No typing / presence channel at all | this app's own SSE relay |
 
 ---
 
-## This application's own endpoints
+## Where each endpoint is used
 
-These are **not** part of the upstream API. They exist for one reason: the upstream API has no typing
-channel (see [above](#there-is-no-typing--presence-channel)), and a typing indicator was wanted.
-
-They handle **typing signals only**. No user, conversation or message data passes through them, and
-nothing is stored — an event is fanned out to whoever is currently listening on that conversation and
-then discarded. The provided API remains the sole source of truth for all chat data.
-
-| Method | Path | Purpose |
+| Endpoint | Client function | Consumed by |
 |---|---|---|
-| `POST` | `/api/typing` | announce that you started or stopped typing |
-| `GET` | `/api/typing/stream?conversationId=` | SSE stream of other participants' typing signals |
-
-Both require the same `Authorization: Bearer <jwt>` header as the upstream API. The token is
-validated by calling upstream `GET /auth/me` (we hold no signing secret, so the signature can't be
-verified locally), and conversation membership is checked against upstream `GET /conversations`.
-Both lookups are cached in-process — 60s and 30s respectively — so a burst of keystrokes doesn't
-cause a burst of upstream requests.
-
-### `POST /api/typing`
-
-**Request** — `{ "conversationId": "…", "isTyping": true }`
-
-**Response `204`** with no body — these are fire-and-forget.
-
-| Status | Cause |
-|---|---|
-| `400` | missing/invalid `conversationId` or non-boolean `isTyping` |
-| `401` | missing or invalid token |
-| `403` | not a participant of that conversation |
-
-### `GET /api/typing/stream?conversationId=<id>`
-
-Server-sent events. Each frame carries one signal:
-
-```
-data: {"conversationId":"6a888bcf…","userId":"6a888bc2…","name":"Ada Lovelace","isTyping":true}
-```
-
-Comment frames (`: connected`, `: ping`) are sent on open and every 25 seconds to keep intermediaries
-from closing an idle connection.
-
-**A signal is never delivered back to its author** — the same rule the upstream socket follows for
-`message:new`, which keeps the client logic uniform.
-
-The client reads this with `fetch` and a stream reader rather than `EventSource`, because
-`EventSource` cannot set an `Authorization` header and putting a JWT in the query string would leak
-it into access logs and browser history. Reconnection with backoff is handled in
-[`hooks/useTypingIndicator.ts`](../hooks/useTypingIndicator.ts).
-
-> **Deployment note.** The relay keeps its subscribers in process memory, so it requires a
-> **single long-running Node server** (`next start`, Docker, Render, Railway, a VPS). On a serverless
-> platform such as Vercel, each invocation has its own memory and the publisher and subscriber may
-> land on different instances, so signals would not be delivered. That target needs an external
-> broker — Redis pub/sub, Ably or Pusher — behind the same interface in
-> [`lib/typing/registry.ts`](../lib/typing/registry.ts). Everything else in the app is static and
-> deploys anywhere.
+| `POST /auth/login` | `login()` — [`lib/api/auth.ts`](../lib/api/auth.ts) | login form; session stored by [`lib/auth/session.ts`](../lib/auth/session.ts) |
+| `GET /auth/me` | `getMe()` — [`lib/api/auth.ts`](../lib/api/auth.ts) | boot, to rehydrate and revalidate |
+| `GET /users/search` | `searchUsers()` — [`lib/api/users.ts`](../lib/api/users.ts) | new-chat and group dialogs |
+| `GET /conversations` | `listConversations()` — [`lib/api/conversations.ts`](../lib/api/conversations.ts) | [`hooks/useConversations.ts`](../hooks/useConversations.ts) |
+| `POST /conversations` | `startDirectConversation()` | new-chat dialog |
+| `POST /conversations/group` | `createGroup()` | create-group dialog |
+| `GET .../messages` | `getMessages()` — [`lib/api/messages.ts`](../lib/api/messages.ts) | [`hooks/useMessages.ts`](../hooks/useMessages.ts) |
+| `POST /messages` | `sendMessage()` — [`lib/api/messages.ts`](../lib/api/messages.ts) | composer, with optimistic bubbles |
+| Socket.io | — | [`hooks/useRealtime.ts`](../hooks/useRealtime.ts), one shared connection |
+| `/api/typing*` | [`lib/api/typing.ts`](../lib/api/typing.ts) | [`hooks/useTypingIndicator.ts`](../hooks/useTypingIndicator.ts) |
