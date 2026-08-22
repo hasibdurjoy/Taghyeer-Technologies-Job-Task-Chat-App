@@ -13,8 +13,10 @@ import { useToast } from '@/components/ui/Toast';
 import { useConversations } from '@/hooks/useConversations';
 import { useDrafts } from '@/hooks/useDrafts';
 import { useMessages } from '@/hooks/useMessages';
+import { useNotificationSound } from '@/hooks/useNotificationSound';
 import { useRealtime } from '@/hooks/useRealtime';
 import { useTypingIndicator } from '@/hooks/useTypingIndicator';
+import { useTypingSound } from '@/hooks/useTypingSound';
 import { cx } from '@/lib/utils';
 import type { Message, User } from '@/types/chat';
 
@@ -71,6 +73,11 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
   // typing channel (docs/API.md → "There is no typing / presence channel").
   const { typingUsers, notifyTyping, clearTyping } = useTypingIndicator(token, activeId);
 
+  // Loops while the indicator is on screen. `typingUsers` is already scoped to
+  // the open conversation and excludes the current user, so it is exactly the
+  // condition the indicator itself renders on.
+  useTypingSound(typingUsers.length > 0);
+
   // Realtime handlers read the active id through a ref so that switching
   // conversations never tears down and re-establishes the socket.
   const activeIdRef = useRef<string | null>(activeId);
@@ -78,13 +85,21 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
     activeIdRef.current = activeId;
   }, [activeId]);
 
+  const playNotificationSound = useNotificationSound();
+
   const handleRealtimeMessage = useCallback(
     (message: Message) => {
       const isActive = message.conversationId === activeIdRef.current;
       if (isActive) receive(message);
       applyIncomingMessage(message, isActive);
+
+      // Sound plays whether the tab is focused or in the background — the
+      // socket keeps delivering either way. The server never echoes a message
+      // back to its sender (see `useRealtime`), but the guard keeps a stray
+      // echo from pinging you for your own message.
+      if (message.senderId !== currentUser.id) playNotificationSound();
     },
-    [receive, applyIncomingMessage],
+    [receive, applyIncomingMessage, currentUser.id, playNotificationSound],
   );
 
   const handleReconnect = useCallback(() => {
