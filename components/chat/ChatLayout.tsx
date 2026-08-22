@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 
+import { AddMembersDialog } from '@/components/chat/AddMembersDialog';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { ConversationDetails } from '@/components/chat/ConversationDetails';
 import { ConversationSidebar } from '@/components/chat/ConversationSidebar';
@@ -11,9 +12,13 @@ import { MessageComposer } from '@/components/chat/MessageComposer';
 import { MessageList } from '@/components/chat/MessageList';
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 import { SidebarResizer } from '@/components/chat/SidebarResizer';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { useConversations } from '@/hooks/useConversations';
 import { useDrafts } from '@/hooks/useDrafts';
+import { useGroupAdmin } from '@/hooks/useGroupAdmin';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useMessages } from '@/hooks/useMessages';
 import { useNotificationSound } from '@/hooks/useNotificationSound';
 import { useRealtime } from '@/hooks/useRealtime';
@@ -67,8 +72,33 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
   );
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [isNewGroupOpen, setIsNewGroupOpen] = useState(false);
-  // Only ever rendered from `xl` up; below that the layout stays two-column.
-  const [isDetailsOpen, setIsDetailsOpen] = useState(true);
+  /**
+   * The details panel has two presentations, and therefore two pieces of state:
+   * a docked third column from `xl` up (open by default, where there is room)
+   * and a sheet below that (opened on demand). One header button drives whichever
+   * one the viewport is currently showing.
+   */
+  const [isDetailsDocked, setIsDetailsDocked] = useState(true);
+  const [isDetailsSheetOpen, setIsDetailsSheetOpen] = useState(false);
+  // `xl` in Tailwind's default scale.
+  const isWideViewport = useMediaQuery('(min-width: 80rem)');
+  const [isAddMembersOpen, setIsAddMembersOpen] = useState(false);
+  /** The member an admin is about to remove — drives the confirmation step. */
+  const [memberToRemove, setMemberToRemove] = useState<User | null>(null);
+  const [isConfirmingLeave, setIsConfirmingLeave] = useState(false);
+
+  /**
+   * Fired when the current user is removed from a group by an admin. The
+   * conversation is already gone from the list by this point; this closes it if
+   * it happened to be open and explains why it vanished.
+   */
+  const handleRemovedFromConversation = useCallback(
+    (conversationId: string) => {
+      setActiveId((current) => (current === conversationId ? null : current));
+      showToast('You were removed from that group.');
+    },
+    [showToast],
+  );
 
   const {
     conversations,
@@ -79,8 +109,10 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
     applyIncomingMessage,
     applyOwnMessage,
     applyConversationUpdate,
+    applyConversation,
+    removeConversation,
     markRead,
-  } = useConversations(token, currentUser.id);
+  } = useConversations(token, currentUser.id, { onRemoved: handleRemovedFromConversation });
 
   const {
     messages,
@@ -147,6 +179,35 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
 
   const activeConversation = conversations.find((item) => item.id === activeId) ?? null;
 
+  /** Leaving is initiated here, so the conversation is closed as soon as it succeeds. */
+  const handleLeft = useCallback(
+    (conversationId: string) => {
+      removeConversation(conversationId);
+      setActiveId((current) => (current === conversationId ? null : current));
+      setMobilePane('list');
+      setIsConfirmingLeave(false);
+      showToast('You left the group.', 'success');
+    },
+    [removeConversation, showToast],
+  );
+
+  const groupAdmin = useGroupAdmin({
+    token,
+    currentUserId: currentUser.id,
+    // Every admin endpoint returns the full updated group, so it is applied
+    // directly. The `conversation:updated` event that follows merges to the same
+    // state, which makes the double-apply harmless.
+    onUpdated: applyConversation,
+    onLeft: handleLeft,
+    onError: showToast,
+  });
+
+  const handleRemoveMember = useCallback(async () => {
+    if (!activeConversation || !memberToRemove) return;
+    const removed = await groupAdmin.removeMember(activeConversation.id, memberToRemove.id);
+    if (removed) setMemberToRemove(null);
+  }, [activeConversation, memberToRemove, groupAdmin]);
+
   // Opening a conversation clears its badge.
   useEffect(() => {
     if (activeId) markRead(activeId);
@@ -155,7 +216,14 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
   const openConversation = useCallback((conversationId: string) => {
     setActiveId(conversationId);
     setMobilePane('conversation');
+    // The sheet describes one conversation; switching makes it stale.
+    setIsDetailsSheetOpen(false);
   }, []);
+
+  const toggleDetails = useCallback(() => {
+    if (isWideViewport) setIsDetailsDocked((open) => !open);
+    else setIsDetailsSheetOpen((open) => !open);
+  }, [isWideViewport]);
 
   const handleConversationCreated = useCallback(
     async (conversationId: string) => {
@@ -251,8 +319,8 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
                 conversation={activeConversation}
                 typingUsers={typingUsers}
                 onBack={() => setMobilePane("list")}
-                isDetailsOpen={isDetailsOpen}
-                onToggleDetails={() => setIsDetailsOpen((open) => !open)}
+                isDetailsOpen={isWideViewport ? isDetailsDocked : isDetailsSheetOpen}
+                onToggleDetails={toggleDetails}
               />
               <MessageList
                 conversation={activeConversation}
@@ -287,11 +355,17 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
           )}
         </main>
 
-        {activeConversation && isDetailsOpen && (
+        {activeConversation && isDetailsDocked && (
           <ConversationDetails
             conversation={activeConversation}
             currentUser={currentUser}
-            className="hidden w-80 shrink-0 xl:flex"
+            pending={groupAdmin.pending}
+            onRename={(name) => groupAdmin.rename(activeConversation.id, name)}
+            onAddMembers={() => setIsAddMembersOpen(true)}
+            onRemoveMember={setMemberToRemove}
+            onPromote={(member) => void groupAdmin.promote(activeConversation.id, member.id)}
+            onLeave={() => setIsConfirmingLeave(true)}
+            className="hidden w-80 shrink-0 border-l border-ink-100 xl:flex"
           />
         )}
       </div>
@@ -313,6 +387,61 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
           token={token}
           currentUser={currentUser}
           onCreated={handleConversationCreated}
+        />
+      )}
+
+      {isDetailsSheetOpen && activeConversation && (
+        <Modal
+          onClose={() => setIsDetailsSheetOpen(false)}
+          title="Details"
+          className="sm:max-w-md"
+        >
+          <ConversationDetails
+            conversation={activeConversation}
+            currentUser={currentUser}
+            pending={groupAdmin.pending}
+            onRename={(name) => groupAdmin.rename(activeConversation.id, name)}
+            onAddMembers={() => setIsAddMembersOpen(true)}
+            onRemoveMember={setMemberToRemove}
+            onPromote={(member) => void groupAdmin.promote(activeConversation.id, member.id)}
+            onLeave={() => setIsConfirmingLeave(true)}
+            className="flex min-h-0 flex-1"
+          />
+        </Modal>
+      )}
+
+      {isAddMembersOpen && activeConversation && (
+        <AddMembersDialog
+          conversation={activeConversation}
+          token={token}
+          currentUser={currentUser}
+          isPending={groupAdmin.pending?.kind === 'add'}
+          onAdd={(userIds) => groupAdmin.addMembers(activeConversation.id, userIds)}
+          onClose={() => setIsAddMembersOpen(false)}
+        />
+      )}
+
+      {memberToRemove && activeConversation && (
+        <ConfirmDialog
+          title={`Remove ${memberToRemove.name}?`}
+          description={`They will lose access to ${activeConversation.title} and its history. You can add them back later.`}
+          confirmLabel="Remove"
+          isDestructive
+          isPending={groupAdmin.pending?.kind === 'remove'}
+          onConfirm={handleRemoveMember}
+          onCancel={() => setMemberToRemove(null)}
+        />
+      )}
+
+      {isConfirmingLeave && activeConversation && (
+        <ConfirmDialog
+          title={`Leave ${activeConversation.title}?`}
+          description="You'll stop receiving messages from this group and it will disappear from your list. Only an admin can add you back."
+          confirmLabel="Leave group"
+          isDestructive
+          isPending={groupAdmin.pending?.kind === 'leave'}
+          onConfirm={() => void groupAdmin.leave(activeConversation.id)}
+          onCancel={() => setIsConfirmingLeave(false)}
         />
       )}
     </div>

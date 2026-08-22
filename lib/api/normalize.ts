@@ -56,6 +56,29 @@ function normalizeLastMessage(raw: RawConversation['lastMessage']): LastMessageP
  * may arrive as bare id strings on some payloads, so those are dropped rather
  * than rendered as objects with missing names.
  */
+/**
+ * Whether the given user still belongs to a raw conversation payload.
+ *
+ * Needed because of a genuine upstream quirk: when you are removed from a group
+ * (or leave it), the server sends you the resulting `conversation:updated`
+ * *before* dropping you from the room. Taken at face value that event would put
+ * a group you're no longer in back into your sidebar, where opening it returns
+ * 403. Checking membership on the raw payload — `normalizeConversation` filters
+ * you out of `participants` by design, so it can't be checked afterwards — lets
+ * the caller drop the conversation instead.
+ *
+ * Returns `true` when membership can't be determined, so an unexpected payload
+ * shape never silently deletes a conversation.
+ */
+export function rawHasParticipant(raw: RawConversation, userId: string): boolean {
+  if (raw.participant) return true;
+  if (!raw.participants) return true;
+
+  return raw.participants.some((entry) =>
+    typeof entry === 'string' ? entry === userId : entry._id === userId,
+  );
+}
+
 export function normalizeConversation(raw: RawConversation, currentUserId: string): Conversation {
   const type = raw.type ?? (raw.name || (raw.participants?.length ?? 0) > 2 ? 'group' : 'direct');
 

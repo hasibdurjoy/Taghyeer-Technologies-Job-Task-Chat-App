@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "verify": "node --experimental-strip-types --no-warnings --import ./scripts/register-loader.mjs scripts/verify-logic.ts",
     "verify:api": "node --experimental-strip-types --no-warnings --import ./scripts/register-loader.mjs scripts/verify-integration.ts",
-    "verify:typing": "node --experimental-strip-types --no-warnings --import ./scripts/register-loader.mjs scripts/verify-typing.ts"
+    "verify:typing": "node --experimental-strip-types --no-warnings --import ./scripts/register-loader.mjs scripts/verify-typing.ts",
+    "verify:groups": "node --experimental-strip-types --no-warnings --import ./scripts/register-loader.mjs scripts/verify-group-admin.ts"
   },
   "dependencies": {
     "lucide-react": "^1.33.0",

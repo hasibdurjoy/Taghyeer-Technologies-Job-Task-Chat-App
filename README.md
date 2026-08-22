@@ -30,7 +30,8 @@ Built against the assignment's provided API at `https://frontend-task-chatapp.on
 Messengo has two halves:
 
 **The chat application** (`/login`, `/chat`) — sign in with a phone number and name, find people,
-start one-to-one or group conversations, and exchange messages that arrive in real time. It handles
+start one-to-one or group conversations, administer those groups — rename, add and remove members,
+promote admins, leave — and exchange messages that arrive in real time. It handles
 the parts that usually get skipped: live typing indicators with a sound to match, a notification
 sound when a message lands (backgrounded tab included), per-conversation drafts, retrying a failed
 send without retyping it, unread badges, connection status, a conversation list you can drag to the
@@ -92,11 +93,15 @@ npm run lint         # eslint
 npm run verify        # pure-logic suite: normalization + the API quirk handling
 npm run verify:api    # integration suite against the LIVE API and socket
 npm run verify:typing # typing relay: cross-user delivery + authorization
+npm run verify:groups # group admin: rename / add / remove / promote + permissions
 ```
 
 `npm run verify:typing` needs the app running locally (`npm run dev` or `npm start`); it signs in as
 three real users and asserts that a signal from one genuinely reaches another and is withheld from
 non-participants.
+
+`npm run verify:groups` runs against the live API only (nothing local needed). It creates four
+accounts and a group, then exercises every administrative endpoint and every permission boundary.
 
 `npm run verify:api` creates three throwaway accounts on the live API and opens a real Socket.io
 connection, so it needs network access and takes ~30 seconds. It covers idempotent conversation
@@ -251,10 +256,12 @@ components/
   auth/ chat/             sign-in and the full chat
   landing/                marketing sections, plus the header messages menu and
                           the floating chat dock (provider · window)
-  ui/                     Button, Avatar, Modal, TextField, Toast, StateViews
+  ui/                     Button, Avatar, Modal, ConfirmDialog, TextField, Toast,
+                          StateViews
 hooks/                    useAuth, useConversations, useMessages, useRealtime,
                           useTypingIndicator, useAutoScroll, useUserSearch, useDrafts,
-                          useNotificationSound, useTypingSound, useResizableSidebar
+                          useNotificationSound, useTypingSound, useResizableSidebar,
+                          useGroupAdmin, useMediaQuery
 lib/
   api/                    http, normalize, auth, users, conversations, messages, typing
   auth/  storage/  typing/
@@ -262,6 +269,7 @@ lib/
 types/                    api.ts (wire shapes) · chat.ts (domain shapes)
 public/                   logo, OG source art, notification + typing audio
 scripts/                  verify-logic.ts · verify-integration.ts
+                          verify-typing.ts · verify-group-admin.ts
 docs/API.md
 ```
 
@@ -469,7 +477,7 @@ touch-device testing hasn't been done.
 
 ## Issues Encountered
 
-The API is solid, but it has real quirks. All 18 are tabulated in
+The API is solid, but it has real quirks. All 19 are tabulated in
 [`docs/API.md` → Known quirks](docs/API.md#known-quirks); these are the ones that changed the design.
 
 **1. Phone search is impossible for `+`-prefixed numbers.** `/users/search` interpolates `q` straight
@@ -539,7 +547,16 @@ see [Deployment](#deployment). Full probe write-up in
 
 Three that cost real time and had nothing to do with the upstream service.
 
-**14. Unlayered CSS silently beat every Tailwind utility.** The global focus treatment in
+**14. Being removed from a group still sends you that group's update event.** When an admin removes
+you — or you leave — the server broadcasts the resulting `conversation:updated` **to you as well**,
+and only then drops you from the room. So the last event you receive describes a group whose
+`participants` no longer include you. Applied naively that puts a group back in your sidebar that
+`GET /conversations` omits and whose messages return `403`. **Handled** by checking membership on the
+*raw* payload (`rawHasParticipant`) — `normalizeConversation` filters you out of `participants` by
+design, so it can't be checked after normalization — and dropping the conversation instead, with a
+toast explaining where it went. Covered by `npm run verify:groups`.
+
+**15. Unlayered CSS silently beat every Tailwind utility.** The global focus treatment in
 `globals.css` was written as plain CSS. Tailwind v4 emits all utilities inside `@layer utilities`,
 and **unlayered rules outrank layered ones regardless of specificity** — so a `:where(...)` selector
 with almost no specificity was overriding `focus:outline-none` on the two text inputs that had
@@ -548,13 +565,13 @@ explicitly opted out. The visible symptom was a doubled focus ring on the compos
 the rule into `@layer base` and deleting the radius; browsers already draw an outline along an
 element's own corners, and forcing one only deforms rounded controls.
 
-**15. Contrast, not taste, drove the gradient design.** The first pass painted the closing CTA and
+**16. Contrast, not taste, drove the gradient design.** The first pass painted the closing CTA and
 the primary button with the full logo ramp. White text on the cyan end measures 2.7:1 — below even
 the 3:1 large-text threshold. Everything that carries text was cut back to the ramp's deep half, and
 the headline sheen tops out at `#0b7cfd` (3.7:1, and only used at display sizes) rather than the
 cyan that would have looked better and read worse.
 
-**16. iOS Safari zooms on any input under 16px.** Both fields sat at 15px, one pixel under the
+**17. iOS Safari zooms on any input under 16px.** Both fields sat at 15px, one pixel under the
 threshold, so focusing them zoomed the viewport and never zoomed back out. Both are `text-base` now,
 with a comment at each site saying why — it otherwise looks like a value worth "tidying" back down
 to match the surrounding type.
@@ -566,8 +583,6 @@ to match the surrounding type.
 - **Message virtualisation and infinite scroll-up**, replacing the explicit "load earlier" button.
 - **A real test suite** — the verification scripts here are thorough but ad-hoc; they'd become
   Vitest unit tests plus Playwright end-to-end coverage of the flows I could only review by hand.
-- **Group management UI.** The API supports adding/removing members, promoting admins, renaming and
-  leaving; only creation is exposed today. The API layer is already shaped for the rest.
 - **Unread badges that persist**, which needs somewhere to record a last-seen message id per user —
   a small backend of our own, or the API growing read state.
 - **Read receipts**, which need a channel the API doesn't have — the same gap as typing (issue 13),

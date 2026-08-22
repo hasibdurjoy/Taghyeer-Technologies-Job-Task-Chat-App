@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { listConversations } from '@/lib/api/conversations';
-import { normalizeConversation } from '@/lib/api/normalize';
+import { normalizeConversation, rawHasParticipant } from '@/lib/api/normalize';
 import type { RawConversation } from '@/types/api';
 import type { Conversation, Message } from '@/types/chat';
 
@@ -19,7 +19,15 @@ interface UseConversationsResult {
   /** Applies a message the current user sent — no socket echo arrives for these. */
   applyOwnMessage: (message: Message) => void;
   applyConversationUpdate: (raw: RawConversation) => void;
+  /** Merges an authoritative conversation (e.g. a group admin response) into the list. */
+  applyConversation: (conversation: Conversation) => void;
+  removeConversation: (conversationId: string) => void;
   markRead: (conversationId: string) => void;
+}
+
+interface UseConversationsOptions {
+  /** Fired when the current user is removed from, or leaves, a conversation. */
+  onRemoved?: (conversationId: string) => void;
 }
 
 function sortByRecency(conversations: Conversation[]): Conversation[] {
@@ -38,7 +46,11 @@ function sortByRecency(conversations: Conversation[]): Conversation[] {
  * that arrive while the app is open, which is honest: marking every existing
  * conversation unread on every reload would be worse than showing no badge.
  */
-export function useConversations(token: string, currentUserId: string): UseConversationsResult {
+export function useConversations(
+  token: string,
+  currentUserId: string,
+  options: UseConversationsOptions = {},
+): UseConversationsResult {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
@@ -49,6 +61,13 @@ export function useConversations(token: string, currentUserId: string): UseConve
    */
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const isLoading = loadedFor !== currentUserId;
+
+  // Held in a ref so passing an inline callback doesn't re-create the handlers
+  // that the socket subscription depends on.
+  const onRemovedRef = useRef(options.onRemoved);
+  useEffect(() => {
+    onRemovedRef.current = options.onRemoved;
+  }, [options.onRemoved]);
 
   // A pure fetch: it deliberately does not touch state, so callers stay in
   // control of when the update happens.
@@ -159,25 +178,52 @@ export function useConversations(token: string, currentUserId: string): UseConve
     [applyPreview],
   );
 
+  /**
+   * Merges an authoritative conversation into the list.
+   *
+   * Group admin endpoints return the full updated group, so their responses are
+   * applied through here directly rather than triggering a refetch.
+   */
+  const applyConversation = useCallback((incoming: Conversation) => {
+    setConversations((current) => {
+      const index = current.findIndex((item) => item.id === incoming.id);
+      if (index === -1) return sortByRecency([incoming, ...current]);
+
+      // Admin payloads carry no `lastMessage`; keep the preview we already have.
+      const merged: Conversation = {
+        ...incoming,
+        lastMessage: current[index].lastMessage,
+        updatedAt: current[index].updatedAt,
+      };
+      const next = [...current];
+      next[index] = merged;
+      return next;
+    });
+  }, []);
+
+  const removeConversation = useCallback((conversationId: string) => {
+    setConversations((current) => current.filter((item) => item.id !== conversationId));
+    setUnreadCounts((current) => {
+      if (!(conversationId in current)) return current;
+      const next = { ...current };
+      delete next[conversationId];
+      return next;
+    });
+  }, []);
+
   const applyConversationUpdate = useCallback(
     (raw: RawConversation) => {
-      const incoming = normalizeConversation(raw, currentUserId);
-      setConversations((current) => {
-        const index = current.findIndex((item) => item.id === incoming.id);
-        if (index === -1) return sortByRecency([incoming, ...current]);
-
-        // The event carries no `lastMessage`; keep the preview we already have.
-        const merged: Conversation = {
-          ...incoming,
-          lastMessage: current[index].lastMessage,
-          updatedAt: current[index].updatedAt,
-        };
-        const next = [...current];
-        next[index] = merged;
-        return next;
-      });
+      // Being removed from a group still delivers you that group's update event
+      // (docs/API.md → quirk #19). Without this the group would linger in the
+      // sidebar and 403 on open.
+      if (!rawHasParticipant(raw, currentUserId)) {
+        removeConversation(raw._id);
+        onRemovedRef.current?.(raw._id);
+        return;
+      }
+      applyConversation(normalizeConversation(raw, currentUserId));
     },
-    [currentUserId],
+    [currentUserId, applyConversation, removeConversation],
   );
 
   return {
@@ -189,6 +235,8 @@ export function useConversations(token: string, currentUserId: string): UseConve
     applyIncomingMessage,
     applyOwnMessage,
     applyConversationUpdate,
+    applyConversation,
+    removeConversation,
     markRead,
   };
 }

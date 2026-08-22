@@ -19,8 +19,12 @@ interface UserSearchResultsProps {
   onSelect: (user: User) => void;
   /** Ids already chosen — rendered with a check and a pressed state. */
   selectedIds?: string[];
-  /** Ids the user already has a conversation with, labelled so no duplicate is started. */
+  /** Ids already accounted for — labelled so the row reads as informative, not broken. */
   existingIds?: string[];
+  /** Badge text for an `existingIds` match. */
+  existingLabel?: string;
+  /** When true, `existingIds` rows can't be picked (they're already members). */
+  disableExisting?: boolean;
   busyId?: string | null;
 }
 
@@ -43,6 +47,8 @@ export function UserSearchResults({
   onSelect,
   selectedIds = [],
   existingIds = [],
+  existingLabel = 'Existing chat',
+  disableExisting = false,
   busyId = null,
 }: UserSearchResultsProps) {
   if (!term.trim()) {
@@ -97,18 +103,21 @@ export function UserSearchResults({
           const isSelected = selectedIds.includes(user.id);
           const isExisting = existingIds.includes(user.id);
           const isBusy = busyId === user.id;
+          const isLocked = disableExisting && isExisting;
 
           return (
             <li key={user.id}>
               <button
                 type="button"
                 onClick={() => onSelect(user)}
-                disabled={isBusy}
+                disabled={isBusy || isLocked}
                 aria-pressed={selectedIds.length > 0 ? isSelected : undefined}
                 className={cx(
                   'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors',
-                  'disabled:cursor-wait',
-                  isSelected ? 'bg-ink-100' : 'hover:bg-paper-dim active:bg-ink-100',
+                  isLocked
+                    ? 'cursor-default opacity-60'
+                    : 'disabled:cursor-wait hover:bg-paper-dim active:bg-ink-100',
+                  isSelected && 'bg-ink-100',
                 )}
               >
                 <Avatar name={user.name} seed={user.id} size="sm" />
@@ -122,7 +131,7 @@ export function UserSearchResults({
 
                 {isExisting && !isSelected && (
                   <span className="shrink-0 rounded-full bg-paper-dim px-2 py-0.5 text-[0.6875rem] font-medium text-ink-500">
-                    Existing chat
+                    {existingLabel}
                   </span>
                 )}
 

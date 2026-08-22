@@ -62,7 +62,11 @@ export function ChatHeader({
         )}
       </div>
 
-      {/* Hidden below `xl` for the same reason the panel is: there is no room. */}
+      {/*
+        Available at every size. Above `xl` it docks the details column; below
+        that there is no room for a third column, so it opens the same panel as
+        a sheet — group management must not be desktop-only.
+      */}
       <button
         type="button"
         onClick={onToggleDetails}
@@ -70,7 +74,7 @@ export function ChatHeader({
         aria-label={isDetailsOpen ? 'Hide conversation details' : 'Show conversation details'}
         title={isDetailsOpen ? 'Hide details' : 'Show details'}
         className={cx(
-          'hidden shrink-0 rounded-full p-2 transition-colors xl:inline-flex',
+          'inline-flex shrink-0 rounded-full p-2 transition-colors',
           isDetailsOpen
             ? 'bg-ink-100 text-ink-900'
             : 'text-ink-500 hover:bg-ink-100 hover:text-ink-900',

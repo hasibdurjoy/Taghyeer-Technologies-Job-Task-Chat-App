@@ -247,15 +247,45 @@ Fewer than 2 ids gives `400 VALIDATION_ERROR` with
 
 ### Group administration
 
-All admin-only — a non-admin gets `403 FORBIDDEN`. All return the updated group and broadcast
-`conversation:updated`.
+All four return the **complete updated group** — populated `participants` and `admins` — with `200`,
+and broadcast `conversation:updated` to every current member.
 
-| Method | Path | Body | Does |
-|---|---|---|---|
-| `POST` | `/conversations/{id}/participants` | `{userIds: []}` | add members |
-| `DELETE` | `/conversations/{id}/participants/{userId}` | — | remove a member — **your own id leaves the group** |
-| `POST` | `/conversations/{id}/admins` | `{userId}` | promote to admin |
-| `PATCH` | `/conversations/{id}` | `{name}` | rename |
+| Method | Path | Body | Does | Who may |
+|---|---|---|---|---|
+| `PATCH` | `/conversations/{id}` | `{name}` | rename | admins |
+| `POST` | `/conversations/{id}/participants` | `{userIds: []}` | add members | admins |
+| `DELETE` | `/conversations/{id}/participants/{userId}` | — | remove a member | admins — **but any member may pass their own id, which is "leave group"** |
+| `POST` | `/conversations/{id}/admins` | `{userId}` | promote to admin | admins |
+
+**Errors**, all verified:
+
+| Status | Body | Cause |
+|---|---|---|
+| `403` | `…"Only admins can rename the group","code":"FORBIDDEN"` | non-admin rename |
+| `403` | `…"Only admins can add participants"` | non-admin add |
+| `403` | `…"Only admins can remove other members"` | non-admin removing **someone else** |
+| `403` | `…"Only admins can promote members"` | non-admin promote |
+| `400` | `…"VALIDATION_ERROR","details":[{"path":"name","message":"name is required"}]` | blank rename |
+| `400` | `…"VALIDATION_ERROR","details":[{"path":"userIds","message":"userIds is required"}]` | empty `userIds` |
+| `400` | `{"error":{"message":"One or more users do not exist","code":"UNKNOWN_USER"}}` | unknown id in `userIds` |
+| `400` | `{"error":{"message":"Target user is not a member of this group","code":"NOT_A_MEMBER"}}` | promoting a non-member |
+
+Behaviours established by probing, not assumed:
+
+- **Re-adding an existing member is a no-op**, not an error — `200`, member list unchanged.
+- **Promoting an existing admin is also a no-op** — `200`, admins unchanged.
+- **There is no demote endpoint and no delete-group endpoint.** Promotion is one-way and a group
+  cannot be disbanded; the UI says so rather than letting a user find out afterwards.
+- **A group is never auto-deleted.** It survives down to one remaining member and still appears in
+  that member's list.
+- **Leaving is asymmetric with removing.** `DELETE …/participants/{yourOwnId}` works for any member;
+  the same call aimed at someone else needs admin rights.
+
+**Frontend usage** — `renameGroup`, `addParticipants`, `removeParticipant` and `promoteToAdmin` in
+[`lib/api/conversations.ts`](../lib/api/conversations.ts), wrapped by
+[`hooks/useGroupAdmin.ts`](../hooks/useGroupAdmin.ts) for pending state and one error path. Each
+response is authoritative, so it is applied directly rather than triggering a refetch — the
+`conversation:updated` that follows merges to the same state.
 
 ---
 
@@ -295,6 +325,18 @@ message.
 
 > The socket doesn't validate text either — `message:send` with `text: ""` returns `{ok:true}` and
 > broadcasts an empty message.
+
+### Removal still delivers the event to the removed user
+
+When you are removed from a group — or leave one — the server broadcasts the resulting
+`conversation:updated` **including to you**, and only then drops you from the room. The last event
+you receive therefore describes a group whose `participants` no longer contain you.
+
+Taken at face value it would put a group you can no longer open straight back into your sidebar,
+where `GET /conversations` omits it and `GET /conversations/{id}/messages` answers `403`. The
+frontend checks membership on the **raw** payload — `rawHasParticipant` in
+[`lib/api/normalize.ts`](../lib/api/normalize.ts), because `normalizeConversation` filters you out of
+`participants` by design and so can't be checked afterwards — and drops the conversation instead.
 
 ### There is no typing / presence channel
 
@@ -413,6 +455,7 @@ rest of the codebase stays clean.
 | 16 | Re-login overwrites the display name | documented; login form pre-fills the last used name |
 | 17 | No unread or read state in the API | unread badges tracked in-session only |
 | 18 | No typing / presence channel at all | this app's own SSE relay |
+| 19 | Removal broadcasts `conversation:updated` **to the removed user** | membership checked on the raw payload; conversation dropped from the sidebar |
 
 ---
 
