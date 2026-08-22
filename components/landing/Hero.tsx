@@ -1,8 +1,11 @@
 import Link from 'next/link';
 
 import { ChatPreview } from '@/components/landing/ChatPreview';
+import { HeroAmbience } from '@/components/landing/HeroAmbience';
 import { Reveal } from '@/components/landing/Reveal';
+import { SoundDemo } from '@/components/landing/SoundDemo';
 import { StartCta } from '@/components/landing/StartCta';
+import { TiltCard } from '@/components/landing/TiltCard';
 
 export function Hero() {
   return (
@@ -18,6 +21,8 @@ export function Hero() {
         aria-hidden
         className="brand-glow pointer-events-none absolute -top-40 left-1/2 size-[42rem] -translate-x-1/2 opacity-70 blur-2xl sm:size-[56rem]"
       />
+
+      <HeroAmbience />
 
       <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-5 pb-16 pt-12 sm:px-8 sm:pb-24 sm:pt-16 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:gap-16 lg:pb-28">
         <div className="max-w-xl">
@@ -35,7 +40,7 @@ export function Hero() {
             <h1 className="mt-6 font-display text-[2.75rem] leading-[1.05] tracking-tight text-ink-950 sm:text-6xl lg:text-[4.25rem]">
               Say it once.
               <br />
-              <span className="brand-gradient-text">It&apos;s already there.</span>
+              <span className="brand-gradient-text-sheen">It&apos;s already there.</span>
             </h1>
           </Reveal>
 
@@ -60,14 +65,19 @@ export function Hero() {
           </Reveal>
 
           <Reveal delay={240}>
-            <p className="mt-6 text-sm text-ink-400">
-              No password to remember — sign in with your phone number and name.
-            </p>
+            <div className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-3">
+              <SoundDemo />
+              <p className="text-sm text-ink-400">
+                No password to remember — just your phone number and name.
+              </p>
+            </div>
           </Reveal>
         </div>
 
         <Reveal delay={140} className="lg:pl-4">
-          <ChatPreview />
+          <TiltCard>
+            <ChatPreview />
+          </TiltCard>
         </Reveal>
       </div>
     </section>
