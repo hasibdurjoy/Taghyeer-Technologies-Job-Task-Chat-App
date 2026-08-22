@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { StartCta } from '@/components/landing/StartCta';
+import { HeaderAccount } from '@/components/landing/HeaderAccount';
 import { Wordmark } from '@/components/landing/Wordmark';
 
 export function SiteHeader() {
@@ -18,7 +18,7 @@ export function SiteHeader() {
           >
             Features
           </Link>
-          <StartCta size="md" />
+          <HeaderAccount />
         </nav>
       </div>
     </header>

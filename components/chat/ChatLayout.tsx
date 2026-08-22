@@ -31,6 +31,24 @@ interface ChatLayoutProps {
 type MobilePane = 'list' | 'conversation';
 
 /**
+ * Conversation to open on mount, from `/chat?c=<id>` — how the landing page's
+ * messages menu hands a specific chat over.
+ *
+ * Read straight off `window.location` rather than through `useSearchParams`,
+ * which would drag this statically-rendered route into a Suspense boundary.
+ * `ChatWorkspace` only mounts this after the client-side session restore, so
+ * there is never any server HTML for the read to disagree with.
+ *
+ * The id is shape-checked before use: it goes into state that drives a lookup,
+ * and anything can be typed into a query string.
+ */
+function readRequestedConversationId(): string | null {
+  if (typeof window === 'undefined') return null;
+  const id = new URLSearchParams(window.location.search).get('c');
+  return id && /^[a-f\d]{24}$/i.test(id) ? id : null;
+}
+
+/**
  * Composition root for the chat.
  *
  * This component wires the hooks together and owns only navigation-level state
@@ -40,8 +58,13 @@ type MobilePane = 'list' | 'conversation';
 export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
   const { showToast } = useToast();
 
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [mobilePane, setMobilePane] = useState<MobilePane>('list');
+  const [initialConversationId] = useState(readRequestedConversationId);
+  const [activeId, setActiveId] = useState<string | null>(initialConversationId);
+  // Arriving with a conversation in the URL means the user asked for that
+  // conversation, not for the list they would otherwise land on.
+  const [mobilePane, setMobilePane] = useState<MobilePane>(
+    initialConversationId ? 'conversation' : 'list',
+  );
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [isNewGroupOpen, setIsNewGroupOpen] = useState(false);
   // Only ever rendered from `xl` up; below that the layout stays two-column.
