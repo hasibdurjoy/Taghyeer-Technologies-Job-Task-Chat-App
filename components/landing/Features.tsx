@@ -71,7 +71,7 @@ const FEATURES = [
 
 export function Features() {
   return (
-    <section id="features" className="border-y border-ink-100 bg-surface">
+    <section id="features" className="border-y border-ink-100 bg-paper-dim">
       <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
         <Reveal className="max-w-2xl">
           <h2 className="font-display text-3xl leading-tight tracking-tight text-ink-950 sm:text-4xl">
@@ -82,22 +82,40 @@ export function Features() {
           </p>
         </Reveal>
 
-        <ul className="mt-12 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((feature, index) => (
-            <li key={feature.title}>
-              <Reveal delay={index * 60}>
-                <span
-                  aria-hidden
-                  className="flex size-10 items-center justify-center rounded-xl bg-brand-soft text-brand-700 ring-1 ring-inset ring-brand-600/10"
-                >
-                  <feature.icon className="size-5" strokeWidth={1.75} />
-                </span>
-                <h3 className="mt-4 text-[1.0625rem] font-semibold tracking-tight text-ink-950">
-                  {feature.title}
-                </h3>
-                <p className="mt-2 text-[0.9375rem] leading-relaxed text-ink-500">
-                  {feature.description}
-                </p>
+            <li key={feature.title} className="h-full">
+              <Reveal delay={index * 60} className="h-full">
+                <article className="group relative h-full overflow-hidden rounded-2xl bg-surface p-6 shadow-soft ring-1 ring-ink-100 transition-all duration-300 hover:-translate-y-1 hover:shadow-lifted hover:ring-brand-600/25">
+                  {/* Brand light blooming from the corner, only while hovered. */}
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute -right-16 -top-16 size-40 rounded-full bg-[radial-gradient(closest-side,var(--color-brand-500),transparent)] opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-30"
+                  />
+
+                  {/*
+                    The gradient is a stacked layer rather than a hover
+                    background: a solid colour cannot cross-fade into an image,
+                    so swapping them directly would snap instead of animate.
+                  */}
+                  <span
+                    aria-hidden
+                    className="relative flex size-11 items-center justify-center rounded-xl bg-brand-soft ring-1 ring-inset ring-brand-600/10 transition-all duration-300 group-hover:ring-transparent"
+                  >
+                    <span className="brand-gradient absolute inset-0 rounded-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                    <feature.icon
+                      className="relative size-5 text-brand-700 transition-colors duration-300 group-hover:text-white"
+                      strokeWidth={1.75}
+                    />
+                  </span>
+
+                  <h3 className="relative mt-5 text-[1.0625rem] font-semibold tracking-tight text-ink-950">
+                    {feature.title}
+                  </h3>
+                  <p className="relative mt-2 text-[0.9375rem] leading-relaxed text-ink-500">
+                    {feature.description}
+                  </p>
+                </article>
               </Reveal>
             </li>
           ))}
