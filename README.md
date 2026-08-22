@@ -124,7 +124,7 @@ NEXT_PUBLIC_SOCKET_URL=https://frontend-task-chatapp.onrender.com
 # Public origin of the deployment, used to build absolute Open Graph and
 # canonical URLs. Defaults to http://localhost:3000, which is harmless in
 # development and wrong in production — link previews would point at localhost.
-NEXT_PUBLIC_SITE_URL=https://your-deployment.example.com
+NEXT_PUBLIC_SITE_URL=https://messengo-chat.vercel.app
 ```
 
 `.env.local` is gitignored; `.env.example` carries no secrets and is committed.
