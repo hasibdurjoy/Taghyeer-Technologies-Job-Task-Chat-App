@@ -2,8 +2,10 @@
 
 import { ArrowRight, MessageSquare, Users } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useOptionalFloatingChat } from '@/components/landing/FloatingChatProvider';
 import { Avatar } from '@/components/ui/Avatar';
 import { ConversationSkeleton, EmptyState, ErrorState } from '@/components/ui/StateViews';
 import { listConversations } from '@/lib/api/conversations';
@@ -29,6 +31,8 @@ export function HeaderMessagesMenu({ currentUser, token }: HeaderMessagesMenuPro
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const floatingChat = useOptionalFloatingChat();
+  const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -141,7 +145,17 @@ export function HeaderMessagesMenu({ currentUser, token }: HeaderMessagesMenuPro
             {conversations && conversations.length > 0 && (
               <ul className="p-2">
                 {conversations.map((conversation) => (
-                  <MenuRow key={conversation.id} conversation={conversation} />
+                  <MenuRow
+                    key={conversation.id}
+                    conversation={conversation}
+                    onSelect={() => {
+                      setIsOpen(false);
+                      // Dock it where there's a dock; otherwise open the full
+                      // chat on that conversation.
+                      if (floatingChat) floatingChat.openChat(conversation);
+                      else router.push(`/chat?c=${conversation.id}`);
+                    }}
+                  />
                 ))}
               </ul>
             )}
@@ -166,8 +180,14 @@ export function HeaderMessagesMenu({ currentUser, token }: HeaderMessagesMenuPro
   );
 }
 
-/** One conversation, linking straight into that chat. */
-function MenuRow({ conversation }: { conversation: Conversation }) {
+/** One conversation. Selecting it docks a chat window rather than navigating. */
+function MenuRow({
+  conversation,
+  onSelect,
+}: {
+  conversation: Conversation;
+  onSelect: () => void;
+}) {
   const { id, title, type, participants, lastMessage, updatedAt } = conversation;
   const isGroup = type === 'group';
 
@@ -179,10 +199,10 @@ function MenuRow({ conversation }: { conversation: Conversation }) {
 
   return (
     <li>
-      {/* A real link, so it can be opened in a new tab like any other. */}
-      <Link
-        href={`/chat?c=${id}`}
-        className="flex items-center gap-3 rounded-xl px-2.5 py-2 transition-colors hover:bg-paper-dim"
+      <button
+        type="button"
+        onClick={onSelect}
+        className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-paper-dim"
       >
         <Avatar
           name={title}
@@ -202,7 +222,7 @@ function MenuRow({ conversation }: { conversation: Conversation }) {
             <span className="truncate">{preview}</span>
           </span>
         </span>
-      </Link>
+      </button>
     </li>
   );
 }
