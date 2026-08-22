@@ -38,7 +38,9 @@ width you want, a third column of details on wide screens, and a message list th
 away from history you're reading.
 
 **The landing page** (`/`) — presents the product with an animated preview of the real chat UI,
-pointer-reactive lighting, and a button that plays the app's actual notification sound.
+pointer-reactive lighting, and a button that plays the app's actual notification sound. Signed in, it
+becomes a working client in its own right: your conversations hang off the header, and opening one
+docks a Messenger-style chat window in the corner — real history, real sending, real delivery.
 
 Everything runs against the live API. There is no mock data, no fake authentication, and no
 simulated real-time.
@@ -245,7 +247,9 @@ minimal channel of this app's own: `POST /api/typing` to publish, and an SSE str
 app/                      routes: / (landing), /login, /chat, /api/typing
                           favicon.ico + opengraph-image.png (metadata file conventions)
 components/
-  auth/ chat/ landing/    feature components
+  auth/ chat/             sign-in and the full chat
+  landing/                marketing sections, plus the header messages menu and
+                          the floating chat dock (provider · window)
   ui/                     Button, Avatar, Modal, TextField, Toast, StateViews
 hooks/                    useAuth, useConversations, useMessages, useRealtime,
                           useTypingIndicator, useAutoScroll, useUserSearch, useDrafts,
@@ -425,6 +429,20 @@ and a preview card, all through the App Router's metadata conventions. The card 
 than the WebP it was authored in — Next's `opengraph-image` convention doesn't accept WebP, and the
 Facebook and LinkedIn crawlers don't render it reliably either.
 
+**The landing page is a working client, not a brochure.** Signed in, the header carries your
+conversations and opening one docks a chat window in the corner. Three things make that safe rather
+than a gimmick. The windows **share one socket**, held by the provider — a connection per window
+would mean a connection per open chat, so incoming messages are routed to whichever window registered
+for that conversation. The socket **only connects once a chat is open**, so being signed in costs
+nothing while you're just reading the page. And the dock is **hidden below `md`**, where a 320px
+window would cover the page it floats over.
+
+**Deep links read the URL directly.** `/chat?c=<id>` opens a specific conversation — that's how the
+header menu hands one over when there's no dock to put it in. It reads `window.location` rather than
+`useSearchParams`, which would pull the statically prerendered `/chat` route into a Suspense
+boundary, and the id is shape-checked as a 24-character ObjectId before it reaches state, because
+anything can be typed into a query string.
+
 **Accessibility.** Semantic landmarks, labels on every input (visually hidden where the design calls
 for it), `aria-label` on all icon-only buttons, one consistent focus ring, a focus-trapped dialog
 that restores focus on close, the message list as an `aria-live` log, and `<time dateTime>` on every
@@ -559,6 +577,9 @@ to match the surrounding type.
 - **A backend-for-frontend** holding the token server-side in an httpOnly cookie, if this carried
   real user data.
 - **Optimistic conversation creation**, so opening a new chat doesn't wait on a list refresh.
+- **Persist the floating dock.** Open chat windows are lost on reload or navigation; the sidebar
+  width already persists and this should use the same store. Typing indicators aren't wired into the
+  docked windows either — the relay is there, only the subscription is missing.
 - **Sound preferences** — a mute toggle and a volume control, persisted. Right now the notification
   and typing sounds are always on, which is the right default but the wrong only option.
 - **Remember the details column.** Its open/closed state resets on reload; the sidebar width already

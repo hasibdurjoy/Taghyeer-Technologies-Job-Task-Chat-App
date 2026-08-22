@@ -4,7 +4,10 @@ import {
   BellRing,
   Columns3,
   History,
+  Inbox,
   PenLine,
+  PictureInPicture2,
+  PlugZap,
   Radio,
   Search,
   UsersRound,
@@ -17,7 +20,7 @@ const FEATURES = [
     icon: Radio,
     title: 'Real-time delivery',
     description:
-      'Messages arrive over a live WebSocket connection — no refreshing, no polling delay. A status dot tells you when the connection drops.',
+      'Messages arrive over a live WebSocket connection — no refreshing, and no polling anywhere in the app.',
   },
   {
     icon: UsersRound,
@@ -60,6 +63,24 @@ const FEATURES = [
     title: 'Never loses your place',
     description:
       'Scrolled up reading something? New messages wait in a quiet counter instead of yanking you to the bottom.',
+  },
+  {
+    icon: Inbox,
+    title: 'Your messages, one click away',
+    description:
+      'Signed in on the landing page? Your conversations are in the header — open the list, pick one, and read it without going anywhere.',
+  },
+  {
+    icon: PictureInPicture2,
+    title: 'Chat without leaving the page',
+    description:
+      'Conversations open as floating windows docked in the corner. Keep a few going at once, minimise the ones you are not reading, close the ones you are done with.',
+  },
+  {
+    icon: PlugZap,
+    title: 'Survives a dropped connection',
+    description:
+      'A status dot tells you the moment the socket goes. When it comes back, the conversation and the list are refetched so nothing sent while you were gone is missing.',
   },
   {
     icon: History,
