@@ -1,9 +1,10 @@
 'use client';
 
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, PanelRight } from 'lucide-react';
 
 import { TypingLabel } from '@/components/chat/TypingIndicator';
 import { Avatar } from '@/components/ui/Avatar';
+import { cx } from '@/lib/utils';
 import type { Conversation, TypingUser } from '@/types/chat';
 
 interface ChatHeaderProps {
@@ -11,9 +12,18 @@ interface ChatHeaderProps {
   typingUsers: TypingUser[];
   /** Returns to the conversation list on mobile. */
   onBack: () => void;
+  isDetailsOpen: boolean;
+  /** Shows or hides the details column. Wide screens only — see `ChatLayout`. */
+  onToggleDetails: () => void;
 }
 
-export function ChatHeader({ conversation, typingUsers, onBack }: ChatHeaderProps) {
+export function ChatHeader({
+  conversation,
+  typingUsers,
+  onBack,
+  isDetailsOpen,
+  onToggleDetails,
+}: ChatHeaderProps) {
   const isGroup = conversation.type === 'group';
 
   const subtitle = isGroup
@@ -51,6 +61,23 @@ export function ChatHeader({ conversation, typingUsers, onBack }: ChatHeaderProp
           subtitle && <p className="truncate text-xs text-ink-400">{subtitle}</p>
         )}
       </div>
+
+      {/* Hidden below `xl` for the same reason the panel is: there is no room. */}
+      <button
+        type="button"
+        onClick={onToggleDetails}
+        aria-pressed={isDetailsOpen}
+        aria-label={isDetailsOpen ? 'Hide conversation details' : 'Show conversation details'}
+        title={isDetailsOpen ? 'Hide details' : 'Show details'}
+        className={cx(
+          'hidden shrink-0 rounded-full p-2 transition-colors xl:inline-flex',
+          isDetailsOpen
+            ? 'bg-ink-100 text-ink-900'
+            : 'text-ink-500 hover:bg-ink-100 hover:text-ink-900',
+        )}
+      >
+        <PanelRight aria-hidden className="size-5" />
+      </button>
     </header>
   );
 }

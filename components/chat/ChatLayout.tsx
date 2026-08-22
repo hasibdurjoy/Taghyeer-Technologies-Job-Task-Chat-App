@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import { ChatHeader } from '@/components/chat/ChatHeader';
+import { ConversationDetails } from '@/components/chat/ConversationDetails';
 import { ConversationSidebar } from '@/components/chat/ConversationSidebar';
 import { CreateGroupDialog } from '@/components/chat/CreateGroupDialog';
 import { EmptyConversation } from '@/components/chat/EmptyConversation';
@@ -43,6 +44,8 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
   const [mobilePane, setMobilePane] = useState<MobilePane>('list');
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [isNewGroupOpen, setIsNewGroupOpen] = useState(false);
+  // Only ever rendered from `xl` up; below that the layout stays two-column.
+  const [isDetailsOpen, setIsDetailsOpen] = useState(true);
 
   const {
     conversations,
@@ -225,6 +228,8 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
                 conversation={activeConversation}
                 typingUsers={typingUsers}
                 onBack={() => setMobilePane("list")}
+                isDetailsOpen={isDetailsOpen}
+                onToggleDetails={() => setIsDetailsOpen((open) => !open)}
               />
               <MessageList
                 conversation={activeConversation}
@@ -258,6 +263,14 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
             />
           )}
         </main>
+
+        {activeConversation && isDetailsOpen && (
+          <ConversationDetails
+            conversation={activeConversation}
+            currentUser={currentUser}
+            className="hidden w-80 shrink-0 xl:flex"
+          />
+        )}
       </div>
 
       {/* Mounted only while open so their draft state resets on close. */}
