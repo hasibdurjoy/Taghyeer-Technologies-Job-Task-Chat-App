@@ -1,35 +1,32 @@
+import Image from 'next/image';
+
 import { cx } from '@/lib/utils';
 
+/** Intrinsic size of the source file; Next reserves space from the ratio. */
+const LOGO_WIDTH = 1955;
+const LOGO_HEIGHT = 455;
+
+interface WordmarkProps {
+  className?: string;
+  /** Set on above-the-fold placements so the mark isn't lazy-loaded. */
+  priority?: boolean;
+}
+
 /**
- * The product mark: two overlapping speech shapes, drawn inline so it stays
- * crisp at any size and needs no image request.
+ * The product mark — the full Messengo lockup, icon and name together.
+ *
+ * Sized by height so a caller adjusts it with one class and the width follows
+ * the source ratio. `alt` carries the product name, which is what the mark says.
  */
-export function Wordmark({ className, isOnDark = false }: { className?: string; isOnDark?: boolean }) {
+export function Wordmark({ className, priority = false }: WordmarkProps) {
   return (
-    <span className={cx('inline-flex items-center gap-2', className)}>
-      <svg
-        viewBox="0 0 28 28"
-        aria-hidden
-        className={cx('size-7 shrink-0', isOnDark ? 'text-white' : 'text-ink-950')}
-      >
-        <path
-          d="M4 9.5A5.5 5.5 0 0 1 9.5 4h6A5.5 5.5 0 0 1 21 9.5v2A5.5 5.5 0 0 1 15.5 17H11l-4.6 3.9A.6.6 0 0 1 5.4 20.4L6 17h-.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <circle cx="19.5" cy="18.5" r="4.5" fill="var(--color-accent)" />
-      </svg>
-      <span
-        className={cx(
-          'font-display text-[1.35rem] leading-none tracking-tight',
-          isOnDark ? 'text-white' : 'text-ink-950',
-        )}
-      >
-        Messengo
-      </span>
-    </span>
+    <Image
+      src="/messengo-logo.webp"
+      alt="Messengo"
+      width={LOGO_WIDTH}
+      height={LOGO_HEIGHT}
+      priority={priority}
+      className={cx('h-8 w-auto', className)}
+    />
   );
 }

@@ -8,7 +8,7 @@ export function SiteHeader() {
     <header className="sticky top-0 z-30 border-b border-ink-100/70 bg-paper/85 backdrop-blur-md">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-5 py-3.5 sm:px-8">
         <Link href="/" aria-label="Messengo home" className="shrink-0">
-          <Wordmark />
+          <Wordmark priority />
         </Link>
 
         <nav className="flex items-center gap-1 sm:gap-2" aria-label="Main">
