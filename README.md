@@ -320,13 +320,55 @@ the fetch and restoring it after, so prepended history doesn't push the page aro
 
 ## API Documentation
 
-**→ [`docs/API.md`](docs/API.md)**
+**Full reference → [`docs/API.md`](docs/API.md)**
 
 The upstream Swagger spec is intentionally **request-only** — it documents endpoints, methods and
 request bodies but specifies no response bodies and no status codes. So `docs/API.md` was written
 *before* any application code, by probing the live API: three throwaway accounts exercising every
 endpoint, success and failure paths, pagination, and a real Socket.io session. It documents every
-response shape, every error code, and a table of 17 upstream quirks with where each is handled.
+response shape, every error code, and a table of 18 upstream quirks with where each is handled.
+
+The endpoints at a glance:
+
+| | |
+|---|---|
+| REST base | `https://frontend-task-chatapp.onrender.com/api` |
+| Socket.io | `https://frontend-task-chatapp.onrender.com` — the **root**, no `/api` |
+| Auth | `Authorization: Bearer <jwt>` on everything except login |
+
+| Method | Path | Does | Returns |
+|---|---|---|---|
+| `POST` | `/auth/login` | log in **or** register in one call | `{token, user}` |
+| `GET` | `/auth/me` | current user from token | bare user |
+| `GET` | `/users/search?q=` | find people | bare array, max 50 |
+| `GET` | `/conversations` | your conversations | `{data: [...]}` |
+| `POST` | `/conversations` | start a 1-to-1 (idempotent) | sparse conversation |
+| `POST` | `/conversations/group` | create a group | full group |
+| `GET` | `/conversations/{id}/messages` | history, newest-first | `{messages, hasMore}` |
+| `POST` | `/messages` | send a message | the created message |
+| `PATCH` | `/conversations/{id}` | rename a group | updated group |
+| `POST` | `/conversations/{id}/participants` | add members | updated group |
+| `DELETE` | `/conversations/{id}/participants/{userId}` | remove a member | updated group |
+| `POST` | `/conversations/{id}/admins` | promote to admin | updated group |
+| `GET` | `/health` | health check — served at the **root**, not `/api` | `{status:"ok"}` |
+
+Socket.io events:
+
+| Direction | Event | Payload |
+|---|---|---|
+| ← server | `message:new` | the new message — **never echoed to its own sender** |
+| ← server | `conversation:updated` | a group you're in was created, renamed or changed |
+| → server | `message:send` | `{conversationId, text}` — unused here; this app sends over REST |
+
+And this app's own two endpoints, which exist only because the upstream API has **no typing or
+presence channel** of any kind (probed, not assumed — see
+[`docs/API.md`](docs/API.md#there-is-no-typing--presence-channel)). They carry typing signals only;
+no chat data passes through them and nothing is stored:
+
+| Method | Path | Does |
+|---|---|---|
+| `POST` | `/api/typing` | announce you started or stopped typing |
+| `GET` | `/api/typing/stream?conversationId=` | SSE stream of *other* participants' signals |
 
 ---
 
