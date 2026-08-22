@@ -11,6 +11,15 @@ export const API_BASE_URL =
 export const SOCKET_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL?.replace(/\/$/, '') ?? UPSTREAM_ORIGIN;
 
+/**
+ * Public origin of this deployment, used to build absolute URLs for Open Graph
+ * and canonical tags. Crawlers reject relative image URLs, so a wrong value
+ * here shows as a missing preview rather than a broken page.
+ */
+export const SITE_URL = (
+  process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+).replace(/\/$/, '');
+
 /** Page size for message history requests. */
 export const MESSAGE_PAGE_SIZE = 30;
 

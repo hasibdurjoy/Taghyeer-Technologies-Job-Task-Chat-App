@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { LoginForm } from '@/components/auth/LoginForm';
 
 export const metadata: Metadata = {
-  title: 'Sign in — Messengo',
+  title: 'Sign in',
   description: 'Sign in with your phone number and name to start messaging on Messengo.',
 };
 
