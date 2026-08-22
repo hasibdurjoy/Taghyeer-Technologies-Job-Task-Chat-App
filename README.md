@@ -24,11 +24,14 @@ Messengo has two halves:
 
 **The chat application** (`/login`, `/chat`) — sign in with a phone number and name, find people,
 start one-to-one or group conversations, and exchange messages that arrive in real time. It handles
-the parts that usually get skipped: live typing indicators, per-conversation drafts, retrying a
-failed send without retyping it, unread badges, connection status, and a message list that never
-yanks you away from history you're reading.
+the parts that usually get skipped: live typing indicators with a sound to match, a notification
+sound when a message lands (backgrounded tab included), per-conversation drafts, retrying a failed
+send without retyping it, unread badges, connection status, a conversation list you can drag to the
+width you want, a third column of details on wide screens, and a message list that never yanks you
+away from history you're reading.
 
-**The landing page** (`/`) — presents the product with an animated preview of the real chat UI.
+**The landing page** (`/`) — presents the product with an animated preview of the real chat UI,
+pointer-reactive lighting, and a button that plays the app's actual notification sound.
 
 Everything runs against the live API. There is no mock data, no fake authentication, and no
 simulated real-time.
@@ -48,8 +51,9 @@ simulated real-time.
 
 Three runtime dependencies in total, and **no database** — see [Architecture](#architecture) for why.
 No state-management library, no component library, no animation library; the animations are CSS
-keyframes and one `IntersectionObserver`. The typing relay is plain SSE, so it adds no dependency
-either.
+keyframes, one `IntersectionObserver`, and two small pointer effects that write custom properties
+inside `requestAnimationFrame` rather than rendering per frame. The typing relay is plain SSE, so it
+adds no dependency either.
 
 ---
 
@@ -90,7 +94,7 @@ connection, so it needs network access and takes ~30 seconds. See
 
 ### Environment variables
 
-Both are **optional** — the app runs with no `.env` file at all, pointing at the hosted API.
+All three are **optional** — the app runs with no `.env` file at all, pointing at the hosted API.
 
 ```env
 # Upstream REST base. Must include the /api suffix.
@@ -98,6 +102,11 @@ NEXT_PUBLIC_API_BASE_URL=https://frontend-task-chatapp.onrender.com/api
 
 # Socket.io origin — the ROOT origin, no /api suffix.
 NEXT_PUBLIC_SOCKET_URL=https://frontend-task-chatapp.onrender.com
+
+# Public origin of the deployment, used to build absolute Open Graph and
+# canonical URLs. Defaults to http://localhost:3000, which is harmless in
+# development and wrong in production — link previews would point at localhost.
+NEXT_PUBLIC_SITE_URL=https://your-deployment.example.com
 ```
 
 `.env.local` is gitignored; `.env.example` carries no secrets and is committed.
@@ -204,16 +213,19 @@ minimal channel of this app's own: `POST /api/typing` to publish, and an SSE str
 
 ```
 app/                      routes: / (landing), /login, /chat, /api/typing
+                          favicon.ico + opengraph-image.png (metadata file conventions)
 components/
   auth/ chat/ landing/    feature components
   ui/                     Button, Avatar, Modal, TextField, Toast, StateViews
 hooks/                    useAuth, useConversations, useMessages, useRealtime,
-                          useTypingIndicator, useAutoScroll, useUserSearch, useDrafts
+                          useTypingIndicator, useAutoScroll, useUserSearch, useDrafts,
+                          useNotificationSound, useTypingSound, useResizableSidebar
 lib/
   api/                    http, normalize, auth, users, conversations, messages, typing
   auth/  storage/  typing/
   config.ts format.ts utils.ts validation.ts
 types/                    api.ts (wire shapes) · chat.ts (domain shapes)
+public/                   logo, OG source art, notification + typing audio
 scripts/                  verify-logic.ts · verify-integration.ts
 docs/API.md
 ```
@@ -291,10 +303,17 @@ response shape, every error code, and a table of 17 upstream quirks with where e
 ## Design Decisions
 
 **Visual identity.** The palette is deliberately narrow — warm paper (`#faf8f5`), deep ink, and a
-single amber accent — with an editorial serif (Instrument Serif) for headlines against a neutral
-sans for everything else. The goal was to avoid the purple-gradient SaaS look entirely. The accent is
-*rationed*: it appears on unread badges, the new-messages pill and one hero phrase, and nowhere else,
-so it always means "look here".
+single brand blue — with an editorial serif (Instrument Serif) for headlines against a neutral sans
+for everything else. The blue was not chosen by eye: the ramp is sampled out of the logo file itself
+(`#00a6ff` at the top-left of the bubble, `#1b4ffb` through the wordmark, `#4013f7` at its tail), so
+the product and its mark are painted from the same colours. The accent stays *rationed* — unread
+badges, the new-messages pill, one hero phrase — so it always means "look here".
+
+**Brand colour is used as light, not as paint.** Gradients appear as blurred radial blooms behind
+content rather than flat saturated fills. That is partly taste and partly arithmetic: white on the
+logo's cyan is 2.7:1, which fails at every size. Every surface that carries text uses only the deep
+half of the ramp (5.9:1 and up against white), and the cyan is kept for decorative light and icons
+where nothing has to be read off it.
 
 **Own messages are ink, not accent.** Most chat UIs paint your own bubbles in the brand colour. Over
 a long conversation that's loud. Ink bubbles keep the thread calm and let the accent stay meaningful.
@@ -312,6 +331,27 @@ animation is disabled under `prefers-reduced-motion`.
 **Mobile is a different layout, not a squeeze.** One markup tree serves both: on mobile the
 conversation list and chat are full-width panes with a back button; on desktop both are visible at
 once. The composer keeps its keyboard hints only where a keyboard exists.
+
+**Sound is a feature, not decoration.** An arriving message plays a notification sound whether the
+tab is focused or backgrounded, and the typing indicator loops a sound for exactly as long as it is
+on screen. Both are driven by *rendered state* rather than by events. That matters for the typing
+sound in particular: a sender who closes their tab never emits a "stopped typing" signal, so the
+indicator expires on a TTL sweep — and playback keyed to a start/stop event pair would loop forever
+after a dropped connection. Following the state means the sound cannot outlive the thing it belongs
+to. Browsers also refuse programmatic playback before a user gesture, so the element is primed muted
+on the first interaction rather than failing silently on the first message.
+
+**The layout adapts in two steps, not one.** Below `md` the list and the conversation are full-width
+panes with a back button. From `md` they sit side by side with a draggable divider between them —
+260–560px, capped at half the window, remembered across sessions, and adjustable from the keyboard
+because a drag-only control is unusable without a mouse. From `xl` a third column appears with the
+details of whoever you're talking to. That last breakpoint is `xl` and not `lg` on purpose: at
+1024px with the list dragged wide, the messages would be crushed to roughly 150px.
+
+**The landing page is built to be shared.** Open Graph and Twitter tags, a canonical URL, keywords
+and a preview card, all through the App Router's metadata conventions. The card ships as PNG rather
+than the WebP it was authored in — Next's `opengraph-image` convention doesn't accept WebP, and the
+Facebook and LinkedIn crawlers don't render it reliably either.
 
 **Accessibility.** Semantic landmarks, labels on every input (visually hidden where the design calls
 for it), `aria-label` on all icon-only buttons, one consistent focus ring, a focus-trapped dialog
@@ -454,6 +494,30 @@ server-side code in the project, and it was added deliberately with the deployme
 see [Deployment](#deployment). Full probe write-up in
 [`docs/API.md`](docs/API.md#there-is-no-typing--presence-channel).
 
+### Not the API's fault
+
+Three that cost real time and had nothing to do with the upstream service.
+
+**14. Unlayered CSS silently beat every Tailwind utility.** The global focus treatment in
+`globals.css` was written as plain CSS. Tailwind v4 emits all utilities inside `@layer utilities`,
+and **unlayered rules outrank layered ones regardless of specificity** — so a `:where(...)` selector
+with almost no specificity was overriding `focus:outline-none` on the two text inputs that had
+explicitly opted out. The visible symptom was a doubled focus ring on the composer plus a
+`border-radius: 6px` in the same rule squaring off its rounded corners on focus. The fix was moving
+the rule into `@layer base` and deleting the radius; browsers already draw an outline along an
+element's own corners, and forcing one only deforms rounded controls.
+
+**15. Contrast, not taste, drove the gradient design.** The first pass painted the closing CTA and
+the primary button with the full logo ramp. White text on the cyan end measures 2.7:1 — below even
+the 3:1 large-text threshold. Everything that carries text was cut back to the ramp's deep half, and
+the headline sheen tops out at `#0b7cfd` (3.7:1, and only used at display sizes) rather than the
+cyan that would have looked better and read worse.
+
+**16. iOS Safari zooms on any input under 16px.** Both fields sat at 15px, one pixel under the
+threshold, so focusing them zoomed the viewport and never zoomed back out. Both are `text-base` now,
+with a comment at each site saying why — it otherwise looks like a value worth "tidying" back down
+to match the surrounding type.
+
 ---
 
 ## Improvements With More Time
@@ -473,6 +537,12 @@ see [Deployment](#deployment). Full probe write-up in
 - **A backend-for-frontend** holding the token server-side in an httpOnly cookie, if this carried
   real user data.
 - **Optimistic conversation creation**, so opening a new chat doesn't wait on a list refresh.
+- **Sound preferences** — a mute toggle and a volume control, persisted. Right now the notification
+  and typing sounds are always on, which is the right default but the wrong only option.
+- **Remember the details column.** Its open/closed state resets on reload; the sidebar width already
+  persists and this should use the same store.
+- **An icon-only variant of the logo.** The mark is a wide lockup, so it can't fill the square slot
+  on the sign-in screen, which still uses a generic glyph.
 
 ### Closing note
 
