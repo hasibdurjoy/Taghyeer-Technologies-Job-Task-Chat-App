@@ -154,15 +154,15 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-paper">
-      <div className="mx-auto flex w-full max-w-[100rem] flex-1 overflow-hidden">
+      <div className="flex w-full flex-1 overflow-hidden">
         {/*
           One markup tree serves both layouts: on mobile each pane takes the full
           width and visibility is toggled, on desktop both are always visible.
         */}
         <ConversationSidebar
           className={cx(
-            'w-full shrink-0 border-r border-ink-100 bg-surface md:flex md:w-80 lg:w-96',
-            mobilePane === 'conversation' ? 'hidden md:flex' : 'flex',
+            "w-full shrink-0 border-r border-ink-100 bg-surface md:flex md:w-80 lg:w-96",
+            mobilePane === "conversation" ? "hidden md:flex" : "flex",
           )}
           currentUser={currentUser}
           conversations={conversations}
@@ -179,8 +179,8 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
 
         <main
           className={cx(
-            'min-w-0 flex-1 flex-col bg-paper',
-            mobilePane === 'conversation' ? 'flex' : 'hidden md:flex',
+            "min-w-0 flex-1 flex-col bg-paper",
+            mobilePane === "conversation" ? "flex" : "hidden md:flex",
           )}
         >
           {activeConversation ? (
@@ -188,7 +188,7 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
               <ChatHeader
                 conversation={activeConversation}
                 typingUsers={typingUsers}
-                onBack={() => setMobilePane('list')}
+                onBack={() => setMobilePane("list")}
               />
               <MessageList
                 conversation={activeConversation}
@@ -210,7 +210,7 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
                 onDraftChange={setDraft}
                 onTyping={notifyTyping}
                 onSend={handleSend}
-                isDisconnected={connectionStatus === 'disconnected'}
+                isDisconnected={connectionStatus === "disconnected"}
               />
             </>
           ) : (

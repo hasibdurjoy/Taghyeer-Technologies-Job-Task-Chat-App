@@ -93,13 +93,13 @@ export function MessageComposer({
   return (
     <div className="border-t border-ink-100 bg-surface px-3 py-3 sm:px-6 sm:py-4">
       {isDisconnected && (
-        <p className="mx-auto mb-2 max-w-3xl text-xs text-ink-500" role="status">
+        <p className="mb-2 text-xs text-ink-500" role="status">
           You&apos;re offline — reconnecting. Messages you send may not go through yet.
         </p>
       )}
 
       <form
-        className="mx-auto flex max-w-3xl items-end gap-2"
+        className="flex items-end gap-2"
         onSubmit={(event) => {
           event.preventDefault();
           void submit();
@@ -143,7 +143,7 @@ export function MessageComposer({
         </button>
       </form>
 
-      <p className="mx-auto mt-2 hidden max-w-3xl text-[0.6875rem] text-ink-400 sm:block">
+      <p className="mt-2 hidden text-[0.6875rem] text-ink-400 sm:block">
         <kbd className="font-sans font-medium">Enter</kbd> to send ·{' '}
         <kbd className="font-sans font-medium">Shift + Enter</kbd> for a new line
       </p>

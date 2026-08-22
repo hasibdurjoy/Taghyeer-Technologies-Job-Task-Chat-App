@@ -106,11 +106,20 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* A single, consistent focus treatment across every interactive element. */
-:where(a, button, input, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-  border-radius: 6px;
+/*
+ * A single, consistent focus treatment across every interactive element.
+ *
+ * It sits in `base` so a component can opt out with `focus:outline-none` and
+ * supply its own: unlayered rules outrank every Tailwind utility no matter the
+ * specificity, so as plain CSS this quietly won over the text inputs that had
+ * already opted out. The radius is left alone — browsers draw the outline along
+ * the element's own corners, and forcing one squares off rounded controls.
+ */
+@layer base {
+  :where(a, button, input, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
 }
 
 /* The scroll containers in the chat get a lighter scrollbar than the default. */

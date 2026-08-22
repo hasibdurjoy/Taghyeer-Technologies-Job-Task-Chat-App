@@ -148,7 +148,7 @@ export function MessageList({
               className="py-16"
             />
             {typingUsers.length > 0 && (
-              <div className="mx-auto max-w-3xl px-4 sm:px-6">
+              <div className="px-4 sm:px-6">
                 <TypingBubble users={typingUsers} />
               </div>
             )}
@@ -156,7 +156,7 @@ export function MessageList({
         )}
 
         {messages.length > 0 && (
-          <div className="mx-auto max-w-3xl px-4 py-5 sm:px-6">
+          <div className="px-4 py-5 sm:px-6">
             {hasMore && (
               <div className="mb-4 flex justify-center">
                 <Button
