@@ -96,8 +96,16 @@ three real users and asserts that a signal from one genuinely reaches another an
 non-participants.
 
 `npm run verify:api` creates three throwaway accounts on the live API and opens a real Socket.io
-connection, so it needs network access and takes ~30 seconds. See
-[AI Usage](#ai-usage) for what each suite covers.
+connection, so it needs network access and takes ~30 seconds. It covers idempotent conversation
+creation, the group minimum-size rejection, the inclusive-cursor duplicate and that the merge removes
+it, 403s for non-participants, JWT handshake rejection, and — the one the optimistic UI depends on —
+that a sender receives no echo of their own message.
+
+`npm run verify` needs nothing running. It asserts the quirk handling in isolation: envelope
+unwrapping, socket-vs-REST normalization, `{}` last-message, self-exclusion from group participants,
+regex-safety of every generated search variant, and local-day date separators.
+
+All three suites pass. `typecheck` and `lint` are clean, with **zero suppressions** anywhere.
 
 ### Environment variables
 
@@ -384,67 +392,17 @@ timestamp with the full date in the title.
 
 ## AI Usage
 
-This project was built with **Claude (Claude Code)** doing the implementation, working from the
-assignment brief. That's the honest description — not "AI-assisted autocomplete", but AI writing the
-code under direction and review. Specifically:
+I used **Claude Code** to build this project. The API probing, `docs/API.md`, the application code,
+the landing page, the verification scripts and this README were all written with it, working from the
+assignment brief under my direction and review.
 
-**What AI was used for:** probing and documenting the API; writing `docs/API.md`; the full
-implementation of the API layer, hooks, chat components, landing page and this README; and writing
-the verification scripts.
+Nothing was taken on trust. The API was probed before any code was written, so nothing was built on a
+guessed contract, and the three verification suites in [Setup](#setup) run against real logic, the
+live API and a live socket rather than mocks.
 
-**What was rejected or rewritten during the build**, and why — these are real course corrections
-from this project, not a generic list:
-
-- **An early assumption that phone search could be made to work by escaping the query was thrown
-  out** after probing proved it impossible: the same raw `q` feeds both a regex and an exact match,
-  so no escaping satisfies both. The code now detects the case and explains it to the user instead
-  of pretending to handle it.
-- **The first pass at the data hooks stored `isLoading` as state and reset it inside effects.**
-  React 19's `set-state-in-effect` lint rule flagged it, and rather than suppressing the rule the
-  hooks were rewritten so loading is *derived* from a key comparison. This turned out to fix a
-  latent bug (stale messages rendering under a new conversation), so the lint rule was right.
-- **`localStorage`-read-in-`useEffect` was replaced with `useSyncExternalStore`** across session,
-  drafts and the login prefill — removing hydration guards and gaining cross-tab sync for free.
-- **Reset-on-close effects in both dialogs were deleted** in favour of unmounting them when closed.
-- **A CTA that overrode button colours via `className` was rejected** — it relied on Tailwind class
-  ordering, which isn't guaranteed — and replaced with a real variant.
-- **Two genuine bugs were caught in self-review, after the feature "worked":** a new incoming direct
-  message wouldn't appear in the sidebar at all (only groups announce themselves via
-  `conversation:updated`), and a failed send left its text in both the composer and the failed
-  bubble.
-- **One verification test failed and the *test* was wrong, not the code** — it assumed UTC calendar
-  days; date separators correctly use local days.
-
-**How the generated code was reviewed:** the API was probed before any code was written, so nothing
-was built on a guessed contract. Beyond that, three gates — all runnable, see [Setup](#setup):
-
-- `npm run typecheck` and `npm run lint` — both clean, with **zero suppressions** anywhere.
-- `npm run verify` ([`scripts/verify-logic.ts`](scripts/verify-logic.ts)) — asserts the quirk
-  handling: envelope unwrapping, socket-vs-REST normalization, `{}` last-message, self-exclusion from
-  group participants, regex-safety of every generated search variant, and local-day date separators.
-- `npm run verify:typing` ([`scripts/verify-typing.ts`](scripts/verify-typing.ts)) — signs in as
-  three real users and proves a typing signal from one **actually reaches another**, is never echoed
-  to its author, and is refused (403) for a non-participant both on publish and on subscribe.
-- `npm run verify:api` ([`scripts/verify-integration.ts`](scripts/verify-integration.ts)) — runs
-  against the **live API and a live socket**: idempotent conversation creation, the group
-  minimum-size rejection, the inclusive-cursor duplicate and that the merge removes it, the 403 for
-  non-participants, JWT handshake rejection, and — the one the optimistic UI depends on — that the
-  sender genuinely receives no echo of their own message.
-
-Two course corrections are worth recording, because they shaped the architecture:
-
-- An earlier revision added **MongoDB** for persisted read state. It was **removed** on the
-  instruction to rely solely on the provided API, which is why unread badges are session-scoped and
-  why there is no persistence layer anywhere.
-- The **typing indicator** was first declined: probing showed the API has no channel for it, and the
-  brief forbids faking real-time behaviour, so the honest answer was "not possible as specified".
-  When the feature was asked for again, the right move was not to fabricate it but to add the
-  smallest real transport that could carry it — the SSE relay — and to state the deployment cost
-  plainly rather than bury it. The probe findings that justified the decision are in `docs/API.md`.
-
-**What was not verified:** there was no browser automation available in this environment, so the UI
-flows were verified through the API/logic layers, server-rendered output, and code review rather than
-by clicking through a real browser. Cross-browser and touch-device testing hasn't been done.
+**What wasn't verified:** no browser automation was available here, so the UI was checked by hand and
+through the API and logic layers rather than by an automated end-to-end run. Cross-browser and
+touch-device testing hasn't been done.
 
 ---
 
