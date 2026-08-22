@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { ConversationSidebar } from '@/components/chat/ConversationSidebar';
@@ -9,12 +9,14 @@ import { EmptyConversation } from '@/components/chat/EmptyConversation';
 import { MessageComposer } from '@/components/chat/MessageComposer';
 import { MessageList } from '@/components/chat/MessageList';
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
+import { SidebarResizer } from '@/components/chat/SidebarResizer';
 import { useToast } from '@/components/ui/Toast';
 import { useConversations } from '@/hooks/useConversations';
 import { useDrafts } from '@/hooks/useDrafts';
 import { useMessages } from '@/hooks/useMessages';
 import { useNotificationSound } from '@/hooks/useNotificationSound';
 import { useRealtime } from '@/hooks/useRealtime';
+import { useResizableSidebar } from '@/hooks/useResizableSidebar';
 import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import { useTypingSound } from '@/hooks/useTypingSound';
 import { cx } from '@/lib/utils';
@@ -68,6 +70,8 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
   } = useMessages(token, currentUser.id, activeId);
 
   const { getDraft, setDraft, clearDraft } = useDrafts();
+
+  const sidebar = useResizableSidebar();
 
   // Typing signals travel over this app's own relay: the provided API has no
   // typing channel (docs/API.md → "There is no typing / presence channel").
@@ -169,14 +173,22 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-paper">
-      <div className="flex w-full flex-1 overflow-hidden">
+      {/*
+        The width rides down as a custom property rather than an inline style on
+        the list itself: inline styles have no breakpoint, and the list is a
+        full-width pane on mobile where this width must not apply.
+      */}
+      <div
+        className="flex w-full flex-1 overflow-hidden"
+        style={{ '--sidebar-width': `${sidebar.width}px` } as CSSProperties}
+      >
         {/*
           One markup tree serves both layouts: on mobile each pane takes the full
           width and visibility is toggled, on desktop both are always visible.
         */}
         <ConversationSidebar
           className={cx(
-            "w-full shrink-0 border-r border-ink-100 bg-surface md:flex md:w-80 lg:w-96",
+            "w-full shrink-0 bg-surface md:flex md:w-[var(--sidebar-width)]",
             mobilePane === "conversation" ? "hidden md:flex" : "flex",
           )}
           currentUser={currentUser}
@@ -190,6 +202,15 @@ export function ChatLayout({ currentUser, token }: ChatLayoutProps) {
           onSelect={openConversation}
           onNewChat={() => setIsNewChatOpen(true)}
           onNewGroup={() => setIsNewGroupOpen(true)}
+        />
+
+        <SidebarResizer
+          width={sidebar.width}
+          maxWidth={sidebar.maxWidth}
+          isResizing={sidebar.isResizing}
+          onPointerDown={sidebar.onPointerDown}
+          onKeyDown={sidebar.onKeyDown}
+          onReset={sidebar.reset}
         />
 
         <main
