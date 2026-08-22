@@ -13,11 +13,20 @@ export function Hero() {
         className="texture-dots pointer-events-none absolute inset-0 opacity-60 mask-[radial-gradient(ellipse_60%_50%_at_50%_0%,black,transparent)]"
       />
 
+      {/* Brand light bloom, sitting over the dots and under the content. */}
+      <div
+        aria-hidden
+        className="brand-glow pointer-events-none absolute -top-40 left-1/2 size-[42rem] -translate-x-1/2 opacity-70 blur-2xl sm:size-[56rem]"
+      />
+
       <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-5 pb-16 pt-12 sm:px-8 sm:pb-24 sm:pt-16 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:gap-16 lg:pb-28">
         <div className="max-w-xl">
           <Reveal>
             <span className="inline-flex items-center gap-2 rounded-full bg-surface px-3 py-1.5 text-xs font-medium text-ink-700 shadow-soft ring-1 ring-ink-100">
-              <span aria-hidden className="size-1.5 rounded-full bg-success" />
+              <span aria-hidden className="relative flex size-1.5">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-brand-500 opacity-75" />
+                <span className="relative inline-flex size-1.5 rounded-full bg-brand-600" />
+              </span>
               Real-time delivery over WebSockets
             </span>
           </Reveal>
@@ -26,7 +35,7 @@ export function Hero() {
             <h1 className="mt-6 font-display text-[2.75rem] leading-[1.05] tracking-tight text-ink-950 sm:text-6xl lg:text-[4.25rem]">
               Say it once.
               <br />
-              <span className="text-accent-deep">It&apos;s already there.</span>
+              <span className="brand-gradient-text">It&apos;s already there.</span>
             </h1>
           </Reveal>
 

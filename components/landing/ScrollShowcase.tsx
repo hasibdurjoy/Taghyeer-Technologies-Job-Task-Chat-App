@@ -1,4 +1,4 @@
-import { ArrowDown, PenLine, RotateCw } from 'lucide-react';
+import { ArrowDown, MoveHorizontal, PenLine, RotateCw } from 'lucide-react';
 
 import { Reveal } from '@/components/landing/Reveal';
 
@@ -21,6 +21,12 @@ const DETAILS = [
     title: 'Half-written messages wait for you',
     body: 'Switch conversations mid-thought and come back later — the draft is still sitting in the composer where you left it, per conversation.',
   },
+  {
+    icon: MoveHorizontal,
+    label: 'Your layout',
+    title: 'Drag the list to the width you want',
+    body: 'The divider between your conversations and the messages is a handle. Pull it wider for long group names, narrower for more room to read — it remembers where you left it.',
+  },
 ] as const;
 
 /** Second-level detail section: the small behaviours that make the chat feel finished. */
@@ -36,14 +42,14 @@ export function ScrollShowcase() {
         </h2>
       </Reveal>
 
-      <div className="mt-12 grid gap-6 lg:grid-cols-3">
+      <div className="mt-12 grid gap-6 sm:grid-cols-2">
         {DETAILS.map((detail, index) => (
           <Reveal key={detail.title} delay={index * 80}>
             <article className="h-full rounded-card bg-surface p-6 shadow-soft ring-1 ring-ink-100 transition-shadow hover:shadow-lifted">
               <div className="flex items-center gap-2.5">
                 <span
                   aria-hidden
-                  className="flex size-8 items-center justify-center rounded-lg bg-ink-900 text-white"
+                  className="brand-gradient flex size-8 items-center justify-center rounded-lg text-white"
                 >
                   <detail.icon className="size-4" strokeWidth={2} />
                 </span>

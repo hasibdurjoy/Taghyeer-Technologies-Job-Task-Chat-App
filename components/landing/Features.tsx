@@ -1,4 +1,14 @@
-import { ArrowDownToLine, History, PenLine, Radio, Search, UsersRound } from 'lucide-react';
+import {
+  ArrowDownToLine,
+  AudioLines,
+  BellRing,
+  Columns3,
+  History,
+  PenLine,
+  Radio,
+  Search,
+  UsersRound,
+} from 'lucide-react';
 
 import { Reveal } from '@/components/landing/Reveal';
 
@@ -20,6 +30,24 @@ const FEATURES = [
     title: 'See them typing',
     description:
       'Live typing indicators, so you know a reply is coming instead of staring at a still screen.',
+  },
+  {
+    icon: AudioLines,
+    title: 'Hear them typing',
+    description:
+      'The typing indicator has a sound to go with it, looping softly while the other person writes and stopping the moment they stop.',
+  },
+  {
+    icon: BellRing,
+    title: 'You never miss one',
+    description:
+      'An arriving message plays a notification sound whether the tab is focused or sitting in the background, so you can look away without losing the thread.',
+  },
+  {
+    icon: Columns3,
+    title: 'Three columns when there is room',
+    description:
+      'On a wide screen the conversation list, the messages, and the details of whoever you are talking to all sit side by side. Narrower screens fold back to two.',
   },
   {
     icon: Search,
@@ -60,7 +88,7 @@ export function Features() {
               <Reveal delay={index * 60}>
                 <span
                   aria-hidden
-                  className="flex size-10 items-center justify-center rounded-xl bg-paper-dim text-ink-700"
+                  className="flex size-10 items-center justify-center rounded-xl bg-brand-soft text-brand-700 ring-1 ring-inset ring-brand-600/10"
                 >
                   <feature.icon className="size-5" strokeWidth={1.75} />
                 </span>

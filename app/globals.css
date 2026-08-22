@@ -3,9 +3,9 @@
 /**
  * Design tokens.
  *
- * The palette is deliberately narrow: warm paper, deep ink, and a single amber
- * accent reserved for actions and alerts. Own-message bubbles use ink rather
- * than the accent so a long conversation stays calm to read, which also keeps
+ * The palette is deliberately narrow: warm paper, deep ink, and a single brand
+ * blue reserved for actions and alerts. Own-message bubbles use ink rather than
+ * the brand colour so a long conversation stays calm to read, which also keeps
  * the accent meaningful wherever it does appear.
  */
 @theme {
@@ -23,9 +23,21 @@
   --color-ink-200: #d5dae2;
   --color-ink-100: #e8ebf0;
 
-  --color-accent: #d97706;
-  --color-accent-soft: #fef3c7;
-  --color-accent-deep: #b45309;
+  /*
+   * Brand ramp, sampled from the logo itself: cyan at the top-left of the
+   * speech bubble, royal blue through the wordmark, indigo at its tail.
+   */
+  --color-brand-400: #00a6ff;
+  --color-brand-500: #0b7cfd;
+  --color-brand-600: #1b4ffb;
+  --color-brand-700: #2f2cf8;
+  --color-brand-800: #4013f7;
+  --color-brand-soft: #e7efff;
+
+  /* The accent is the brand's mid blue, so the product matches its mark. */
+  --color-accent: #1b4ffb;
+  --color-accent-soft: #e7efff;
+  --color-accent-deep: #2f2cf8;
 
   --color-danger: #b42318;
   --color-danger-soft: #fef2f1;
@@ -158,6 +170,50 @@ body {
   .reveal-visible {
     animation: var(--animate-rise);
   }
+}
+
+/*
+ * The logo's gradient, reused for brand surfaces and headline words so the page
+ * and the mark are painted from the same ramp.
+ */
+.brand-gradient {
+  background-image: linear-gradient(
+    100deg,
+    var(--color-brand-600) 0%,
+    var(--color-brand-700) 45%,
+    var(--color-brand-800) 100%
+  );
+}
+
+/*
+ * The deep half of the ramp, not the whole thing: white on the logo's cyan is
+ * 2.7:1, which fails at any size. Every stop above clears 5.9:1, so anything
+ * painted with this can carry white text.
+ *
+ * The cyan end still appears on the page — in the glow below, and in the mark
+ * itself — just never under text.
+ */
+
+/* The ramp painted through the glyphs rather than behind them. */
+.brand-gradient-text {
+  background-image: linear-gradient(
+    100deg,
+    var(--color-brand-600) 0%,
+    var(--color-brand-700) 45%,
+    var(--color-brand-800) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Soft brand light bloom behind the hero, sized by the element it is placed on. */
+.brand-glow {
+  background-image: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--color-brand-500) 26%, transparent),
+    transparent
+  );
 }
 
 /* Faint dotted texture used behind the landing hero and the empty chat state. */

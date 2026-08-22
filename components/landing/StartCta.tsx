@@ -14,8 +14,10 @@ interface StartCtaProps {
 }
 
 const VARIANTS: Record<NonNullable<StartCtaProps['variant']>, string> = {
+  // Gradient rather than a flat fill, so the button carries the logo's ramp.
+  // Brightness stands in for a hover fill, which a background-image ignores.
   primary:
-    'bg-ink-900 text-white shadow-soft hover:-translate-y-0.5 hover:bg-ink-800 hover:shadow-lifted',
+    'brand-gradient text-white shadow-soft hover:-translate-y-0.5 hover:brightness-110 hover:shadow-lifted',
   secondary: 'bg-surface text-ink-900 ring-1 ring-inset ring-ink-200 hover:bg-paper-dim',
   onDark: 'bg-white text-ink-950 shadow-soft hover:-translate-y-0.5 hover:bg-white/90',
 };
